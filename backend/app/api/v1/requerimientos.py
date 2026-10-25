@@ -13,6 +13,7 @@ from app.core.reloj import Reloj, fecha_local, obtener_reloj
 from app.esquemas.requerimiento import (
     MetaSalida,
     PacItemSalida,
+    ReglaVigenteSalida,
     RequerimientoDetalle,
     RequerimientoEntrada,
     ResultadoRegistro,
@@ -48,8 +49,7 @@ def detalle_requerimiento(
     """Detalle del requerimiento con su semáforo y las etapas del trámite (CU-04)."""
     servicio = ServicioValidacion(sesion, reloj)
     requerimiento = servicio.obtener_para_usuario(id_requerimiento, usuario)
-    _, parametros = servicio.regla_vigente()
-    return construir_detalle(sesion, requerimiento, parametros)
+    return construir_detalle(sesion, requerimiento)
 
 
 @router.get("/metas", response_model=list[MetaSalida])
@@ -63,3 +63,11 @@ def metas(_: AreaUsuaria, sesion: SesionDep, reloj: RelojDep) -> list[MetaSalida
 def pac_items(_: AreaUsuaria, sesion: SesionDep, reloj: RelojDep) -> list[PacItemSalida]:
     """Ítems del PAC vigente (última carga exitosa del SEACE)."""
     return listar_pac(sesion, fecha_local(reloj()).year)
+
+
+@router.get("/regla-vigente", response_model=ReglaVigenteSalida)
+def regla_vigente(_: AreaUsuaria, sesion: SesionDep, reloj: RelojDep) -> ReglaVigenteSalida:
+    """Tope de 8 UIT de la regla vigente, para validar el monto en la pantalla (RNF-04)."""
+    _, parametros = ServicioValidacion(sesion, reloj).regla_vigente()
+    return ReglaVigenteSalida(valor_uit=parametros.valor_uit, tope_8_uit=parametros.tope_8_uit,
+                              antiguedad_maxima_dias=parametros.antiguedad_maxima_dias)

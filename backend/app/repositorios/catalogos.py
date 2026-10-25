@@ -40,3 +40,6 @@ class RepositorioCatalogos:
         return self._sesion.scalar(
             select(ReglaSemaforo).where(ReglaSemaforo.vigente_hasta.is_(None))
         )
+
+    def obtener_regla(self, id_regla: int) -> ReglaSemaforo | None:
+        return self._sesion.get(ReglaSemaforo, id_regla)

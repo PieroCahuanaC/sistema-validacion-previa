@@ -96,6 +96,8 @@ def test_cpi09_metas_y_pac_para_la_pantalla_p03(cliente):
     assert metas["0012"]["saldo_disponible"] == "31500.00"
     assert metas["0033"]["saldo_disponible"] is None
     assert len(cliente.get("/api/v1/pac-items").json()) == 5
+    regla = cliente.get("/api/v1/regla-vigente").json()
+    assert regla["tope_8_uit"] == "44000.00"
 
 
 def test_cpi10_rol_no_autorizado_recibe_403(cliente):

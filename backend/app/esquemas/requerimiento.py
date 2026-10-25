@@ -71,6 +71,7 @@ class BaseCalculo(BaseModel):
     pim: Decimal | None
     certificacion: Decimal | None
     compromiso_anual: Decimal | None
+    columna_comparacion: str
     saldo_disponible: Decimal | None
     monto_evaluado: Decimal
     fecha_corte: datetime | None
@@ -117,3 +118,11 @@ class PacItemSalida(BaseModel):
     descripcion: str
     tipo_objeto: str
     valor_estimado: Decimal
+
+
+class ReglaVigenteSalida(BaseModel):
+    """Parámetros públicos de la regla vigente que la interfaz necesita para validar (P03)."""
+
+    valor_uit: Decimal
+    tope_8_uit: Decimal
+    antiguedad_maxima_dias: int

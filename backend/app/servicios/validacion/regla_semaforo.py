@@ -51,7 +51,7 @@ class ParametrosRegla:
             columna_comparacion=datos["columna_comparacion"],
             tratamiento_no_previsto_pac=Semaforo(datos["tratamiento_no_previsto_pac"]),
             antiguedad_maxima_dias=int(datos["antiguedad_maxima_dias"]),
-            valor_uit=Decimal(str(datos["valor_uit"])),
+            valor_uit=Decimal(str(datos["valor_uit"])).quantize(Decimal("0.01")),
         )
 
     @property

@@ -68,9 +68,7 @@ def _responsable(
     return "—", "—"
 
 
-def construir_detalle(
-    sesion: Session, requerimiento: Requerimiento, parametros: ParametrosRegla
-) -> RequerimientoDetalle:
+def construir_detalle(sesion: Session, requerimiento: Requerimiento) -> RequerimientoDetalle:
     catalogos = RepositorioCatalogos(sesion)
     presupuesto = RepositorioPresupuesto(sesion)
     requerimientos = RepositorioRequerimientos(sesion)
@@ -80,7 +78,14 @@ def construir_detalle(
     transiciones = catalogos.transiciones()
     estado_actual = estados[requerimiento.id_estado_actual]
     validacion = requerimientos.ultima_validacion(requerimiento.id_requerimiento)
-    semaforo = _semaforo(presupuesto, requerimiento, validacion, parametros)
+    if validacion is None:
+        raise RuntimeError("Todo requerimiento tiene al menos una validación (R12).")
+    regla = catalogos.obtener_regla(validacion.id_regla)
+    if regla is None:
+        raise RuntimeError("La validación referencia una regla inexistente (R14).")
+    # Se usa la versión de la regla con la que se calculó el semáforo, no la vigente (R14).
+    semaforo = _semaforo(presupuesto, requerimiento, validacion,
+                         ParametrosRegla.desde_json(regla.parametros))
     responsable, accion = _responsable(estado_actual, Semaforo(semaforo.estado), transiciones,
                                        roles, estados)
 
@@ -119,10 +124,8 @@ def construir_detalle(
 
 def _semaforo(
     presupuesto: RepositorioPresupuesto, requerimiento: Requerimiento,
-    validacion: ValidacionPresupuestal | None, parametros: ParametrosRegla,
+    validacion: ValidacionPresupuestal, parametros: ParametrosRegla,
 ) -> SemaforoSalida:
-    if validacion is None:
-        raise RuntimeError("Todo requerimiento tiene al menos una validación (R12).")
     saldo = presupuesto.obtener_saldo(validacion.id_saldo) if validacion.id_saldo else None
     carga = presupuesto.obtener_carga(saldo.id_carga) if saldo else None
     pac = (presupuesto.obtener_pac_item(requerimiento.id_pac_item)
@@ -141,6 +144,7 @@ def _semaforo(
             pim=saldo.pim if saldo else None,
             certificacion=saldo.certificacion if saldo else None,
             compromiso_anual=saldo.compromiso_anual if saldo else None,
+            columna_comparacion=parametros.columna_comparacion,
             saldo_disponible=disponible, monto_evaluado=validacion.monto_evaluado,
             fecha_corte=carga.fecha_corte if carga else None,
             previsto_en_pac=pac is not None,
