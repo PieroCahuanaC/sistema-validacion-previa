@@ -16,6 +16,9 @@ class Configuracion(BaseSettings):
     ambiente: Literal["desarrollo", "calidad", "produccion"] = "desarrollo"
     database_url: str = "postgresql+psycopg://svp:svp_dev_local@localhost:5432/svp_dev"
     cors_origins: str = "http://localhost:4321"
+    zona_horaria: str = "America/Lima"
+    # Sigla de la unidad orgánica del usuario provisional del incremento 1.
+    usuario_provisional_unidad: str = "GDUR"
 
     @property
     def documentacion_habilitada(self) -> bool:
@@ -25,6 +28,16 @@ class Configuracion(BaseSettings):
     @property
     def lista_cors(self) -> list[str]:
         return [origen.strip() for origen in self.cors_origins.split(",") if origen.strip()]
+
+    @property
+    def url_sqlalchemy(self) -> str:
+        """Normaliza la cadena de Supabase/Render (postgresql://) al driver psycopg 3."""
+        url = self.database_url
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://"):]
+        if url.startswith("postgresql://"):
+            url = "postgresql+psycopg://" + url[len("postgresql://"):]
+        return url
 
 
 @lru_cache
