@@ -14,7 +14,9 @@ class Configuracion(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     ambiente: Literal["desarrollo", "calidad", "produccion"] = "desarrollo"
-    database_url: str = "postgresql+psycopg://svp:svp_dev_local@localhost:5432/svp_dev"
+    # Sin valor por defecto: la cadena incluye la contraseña y nunca se escribe en el código
+    # (hallazgo de SonarQube "credenciales en el código"). Se define en backend/.env o en Render.
+    database_url: str = ""
     cors_origins: str = "http://localhost:4321"
     zona_horaria: str = "America/Lima"
     # Sigla de la unidad orgánica del usuario provisional del incremento 1.
@@ -33,6 +35,8 @@ class Configuracion(BaseSettings):
     def url_sqlalchemy(self) -> str:
         """Normaliza la cadena de Supabase/Render (postgresql://) al driver psycopg 3."""
         url = self.database_url
+        if not url:
+            raise RuntimeError("Defina la variable DATABASE_URL (ver backend/.env.example).")
         if url.startswith("postgres://"):
             url = "postgresql://" + url[len("postgres://"):]
         if url.startswith("postgresql://"):
