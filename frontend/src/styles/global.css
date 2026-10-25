@@ -1,0 +1,25 @@
+@import "tailwindcss";
+
+/* Tokens del sistema. El color solo se reserva para el semáforo, que es un dato del sistema
+   (Práctica 7); el resto de la interfaz es sobria y legible. */
+@theme {
+  --font-sans: "Public Sans", system-ui, sans-serif;
+  --color-tinta: #1b2533;
+  --color-pizarra: #566273;
+  --color-linea: #d6dce3;
+  --color-fondo: #eef1f4;
+  --color-superficie: #ffffff;
+  --color-accion: #1d4e89;
+  --color-accion-hover: #163d6c;
+  --color-verde: #1e7d46;
+  --color-verde-suave: #e3f2e8;
+  --color-ambar: #a86b00;
+  --color-ambar-suave: #fbf0d9;
+  --color-rojo: #b3261e;
+  --color-rojo-suave: #fbe4e2;
+}
+
+html { font-family: var(--font-sans); color: var(--color-tinta); background: var(--color-fondo); }
+.cifra { font-variant-numeric: tabular-nums; }
+:focus-visible { outline: 3px solid var(--color-accion); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
