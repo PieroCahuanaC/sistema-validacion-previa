@@ -18,8 +18,8 @@ jobs:
       run:
         working-directory: backend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -48,8 +48,8 @@ jobs:
     env:
       TEST_DATABASE_URL: postgresql+psycopg://svp:svp_ci@localhost:5432/svp_test
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -57,7 +57,7 @@ jobs:
       - run: pip install -r requirements-dev.txt
       - name: PyTest con cobertura
         run: pytest --cov --cov-report=xml --cov-report=term --junitxml=reporte-pruebas.xml
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         if: always()
         with:
           name: reportes-pruebas
@@ -73,14 +73,14 @@ jobs:
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         if: env.SONAR_TOKEN != ''
         with:
           fetch-depth: 0
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         if: env.SONAR_TOKEN != ''
         with:
           name: reportes-pruebas
           path: backend
-      - uses: SonarSource/sonarqube-scan-action@v5
+      - uses: SonarSource/sonarqube-scan-action@v7
         if: env.SONAR_TOKEN != ''
