@@ -29,3 +29,6 @@ datos_reales/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Archivos descargados por la app de Claude (no forman parte del proyecto)
+Claude outputs/

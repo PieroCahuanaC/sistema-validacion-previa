@@ -23,8 +23,8 @@ from app.servicios.validacion.regla_semaforo import (
     Motivo,
     ParametrosRegla,
     ResultadoSemaforo,
-    Semaforo,
     SaldoVigente,
+    Semaforo,
     calcular_saldo_disponible,
     opciones_de_ajuste,
 )
