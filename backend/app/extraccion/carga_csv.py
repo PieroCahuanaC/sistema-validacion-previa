@@ -11,6 +11,7 @@ Uso por línea de comandos (desde backend/):
 
 import csv
 import io
+import os
 import sys
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -155,6 +156,21 @@ def _persistir_saldos(sesion: Session, carga: CargaDatos, filas: list[dict]) -> 
                              compromiso_anual=fila["compromiso_anual"]))
 
 
+def resolver_ruta_segura(ruta: str, carpeta_base: str) -> str:
+    """Resuelve la ruta y exige que quede dentro de la carpeta base y sea un .csv.
+
+    Evita el recorrido de directorios (path traversal, CWE-22): una ruta como ../../.env
+    no puede leer archivos fuera de la carpeta de trabajo (hallazgo de SonarQube).
+    """
+    base = os.path.realpath(carpeta_base)
+    real = os.path.realpath(os.path.join(base, ruta))
+    if os.path.commonpath([base, real]) != base:
+        raise ValueError("El archivo debe estar dentro de la carpeta de trabajo.")
+    if not real.lower().endswith(".csv"):
+        raise ValueError("El archivo debe tener extensión .csv.")
+    return real
+
+
 def main(argv: list[str]) -> int:
     from app.core.db import FabricaSesion
 
@@ -162,8 +178,13 @@ def main(argv: list[str]) -> int:
         print(__doc__)
         return 2
     fuente, anio, fecha, ruta = argv
+    try:
+        ruta_segura = resolver_ruta_segura(ruta, os.getcwd())
+    except ValueError as error:
+        print(error)
+        return 2
     corte = datetime.fromisoformat(fecha).replace(tzinfo=ZoneInfo("America/Lima"))
-    with open(ruta, encoding="utf-8") as archivo, FabricaSesion() as sesion:
+    with open(ruta_segura, encoding="utf-8") as archivo, FabricaSesion() as sesion:
         carga = cargar_csv(sesion, fuente, int(anio), corte, archivo.read())
     print(f"Carga {carga.id_carga}: {carga.resultado}. {carga.detalle_error or ''}")
     return 0 if carga.resultado == "EXITOSA" else 1

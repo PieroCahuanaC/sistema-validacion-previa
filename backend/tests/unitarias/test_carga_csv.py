@@ -1,6 +1,8 @@
 """Pruebas unitarias de la validación del CSV de respaldo (RF-14, R01, RI-09). CP-U18 a CP-U25."""
 
-from app.extraccion.carga_csv import validar_csv
+import pytest
+
+from app.extraccion.carga_csv import resolver_ruta_segura, validar_csv
 
 CABECERA_MEF = "meta_codigo,meta_nombre,pim,certificacion,compromiso_anual\n"
 CABECERA_SEACE = "numero_referencia,descripcion,tipo_objeto,valor_estimado\n"
@@ -48,3 +50,12 @@ def test_cpu25_archivo_sin_filas_se_rechaza():
     resultado = validar_csv("SEACE", CABECERA_SEACE)
     assert not resultado.es_valido
     assert resultado.errores == ["El archivo no contiene filas de datos."]
+
+
+def test_cpu26_ruta_fuera_de_la_carpeta_de_trabajo_se_rechaza(tmp_path):
+    (tmp_path / "saldos.csv").write_text("x", encoding="utf-8")
+    assert resolver_ruta_segura("saldos.csv", str(tmp_path)).endswith("saldos.csv")
+    with pytest.raises(ValueError, match="carpeta de trabajo"):
+        resolver_ruta_segura("../../.env.csv", str(tmp_path))
+    with pytest.raises(ValueError, match=".csv"):
+        resolver_ruta_segura(".env", str(tmp_path))
