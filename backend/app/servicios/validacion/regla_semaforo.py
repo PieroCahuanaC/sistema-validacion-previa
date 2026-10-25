@@ -95,27 +95,22 @@ def calcular_saldo_disponible(saldo: SaldoVigente, parametros: ParametrosRegla) 
     return saldo.pim - saldo.compromiso_anual
 
 
-Eslabon = Callable[[EntradaSemaforo], ResultadoSemaforo | None]
+# Cada eslabón recibe el saldo ya verificado como no nulo y el disponible calculado una vez.
+Eslabon = Callable[[EntradaSemaforo, SaldoVigente, Decimal], ResultadoSemaforo | None]
 
 
-def _sin_datos(entrada: EntradaSemaforo) -> ResultadoSemaforo | None:
-    if entrada.saldo is None:
-        return ResultadoSemaforo(Semaforo.AMBAR, Motivo.SIN_DATOS_META, None)
-    return None
-
-
-def _dato_desactualizado(entrada: EntradaSemaforo) -> ResultadoSemaforo | None:
-    assert entrada.saldo is not None
-    antiguedad = entrada.momento - entrada.saldo.fecha_corte
+def _dato_desactualizado(
+    entrada: EntradaSemaforo, saldo: SaldoVigente, disponible: Decimal
+) -> ResultadoSemaforo | None:
+    antiguedad = entrada.momento - saldo.fecha_corte
     if antiguedad > timedelta(days=entrada.parametros.antiguedad_maxima_dias):
-        disponible = calcular_saldo_disponible(entrada.saldo, entrada.parametros)
         return ResultadoSemaforo(Semaforo.AMBAR, Motivo.DATO_DESACTUALIZADO, disponible)
     return None
 
 
-def _presupuesto_insuficiente(entrada: EntradaSemaforo) -> ResultadoSemaforo | None:
-    assert entrada.saldo is not None
-    disponible = calcular_saldo_disponible(entrada.saldo, entrada.parametros)
+def _presupuesto_insuficiente(
+    entrada: EntradaSemaforo, _saldo: SaldoVigente, disponible: Decimal
+) -> ResultadoSemaforo | None:
     # Verde exige que el disponible cubra el monto multiplicado por el umbral (100 % a 200 %).
     exigido = entrada.monto * entrada.parametros.umbral_disponibilidad_pct / 100
     if disponible < exigido:
@@ -123,17 +118,16 @@ def _presupuesto_insuficiente(entrada: EntradaSemaforo) -> ResultadoSemaforo | N
     return None
 
 
-def _no_previsto_pac(entrada: EntradaSemaforo) -> ResultadoSemaforo | None:
+def _no_previsto_pac(
+    entrada: EntradaSemaforo, _saldo: SaldoVigente, disponible: Decimal
+) -> ResultadoSemaforo | None:
     if not entrada.previsto_en_pac:
-        assert entrada.saldo is not None
-        disponible = calcular_saldo_disponible(entrada.saldo, entrada.parametros)
         estado = entrada.parametros.tratamiento_no_previsto_pac
         return ResultadoSemaforo(estado, Motivo.NO_PREVISTO_PAC, disponible)
     return None
 
 
 CADENA: tuple[Eslabon, ...] = (
-    _sin_datos,
     _dato_desactualizado,
     _presupuesto_insuficiente,
     _no_previsto_pac,
@@ -142,12 +136,15 @@ CADENA: tuple[Eslabon, ...] = (
 
 def evaluar_semaforo(entrada: EntradaSemaforo) -> ResultadoSemaforo:
     """Clasifica el requerimiento en verde, ámbar o rojo (RF-03)."""
+    # Primer eslabón: sin saldo no hay nada que comparar (CU-01, flujo 2a). Resolverlo aquí
+    # permite que el resto de la cadena reciba un saldo garantizado, sin aserciones.
+    if entrada.saldo is None:
+        return ResultadoSemaforo(Semaforo.AMBAR, Motivo.SIN_DATOS_META, None)
+    disponible = calcular_saldo_disponible(entrada.saldo, entrada.parametros)
     for eslabon in CADENA:
-        resultado = eslabon(entrada)
+        resultado = eslabon(entrada, entrada.saldo, disponible)
         if resultado is not None:
             return resultado
-    assert entrada.saldo is not None
-    disponible = calcular_saldo_disponible(entrada.saldo, entrada.parametros)
     return ResultadoSemaforo(Semaforo.VERDE, Motivo.DISPONIBLE, disponible)
 
 
