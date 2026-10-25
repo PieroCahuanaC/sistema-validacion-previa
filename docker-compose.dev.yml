@@ -1,0 +1,15 @@
+# Solo para el AMBIENTE DE DESARROLLO (datos mock). Calidad y producción usan Supabase.
+services:
+  db:
+    image: postgres:17.6
+    container_name: svp_db_dev
+    environment:
+      POSTGRES_DB: svp_dev
+      POSTGRES_USER: svp
+      POSTGRES_PASSWORD: svp_dev_local
+    ports:
+      - "5432:5432"
+    volumes:
+      - svp_db_dev:/var/lib/postgresql/data
+volumes:
+  svp_db_dev:

@@ -1,0 +1,20 @@
+[project]
+name = "svp-backend"
+version = "0.1.0"
+description = "Sistema presupuestal de validación previa — backend"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# E/F: errores y pyflakes; I: orden de imports; N: nomenclatura PEP 8; B: errores probables; C90: complejidad
+select = ["E", "F", "I", "N", "B", "C90", "UP"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
