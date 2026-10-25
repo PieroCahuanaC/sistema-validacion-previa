@@ -1,0 +1,7 @@
+---
+import Plantilla from "../../layouts/Plantilla.astro";
+import DetalleRequerimiento from "../../components/DetalleRequerimiento";
+---
+<Plantilla titulo="Detalle del requerimiento y semáforo" ruta={["Inicio", "Mis requerimientos", "Detalle"]} activo="mis">
+  <DetalleRequerimiento client:load />
+</Plantilla>

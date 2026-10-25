@@ -10,6 +10,7 @@ Se adopta desde el primer commit y se verifica de forma automática con Ruff (Py
 | Variables, funciones y módulos Python | `snake_case` (PEP 8) | `calcular_semaforo()` |
 | Clases Python | `PascalCase` | `ReglaSemaforo` |
 | Constantes | `MAYUSCULAS_CON_GUION` | `MOTIVO_SIN_DATOS_META` |
+| Excepciones | `PascalCase` con prefijo `Error` (o nombre del caso) | `ErrorNegocio`, `NoEncontrado` |
 | Componentes React | `PascalCase.tsx`, un componente por archivo | `SemaforoIndicador.tsx` |
 | Variables y funciones TypeScript | `camelCase` | `registrarRequerimiento()` |
 | Tablas y columnas SQL | `snake_case`, singular, como en la Práctica 6 | `requerimiento_item.precio_unitario_ref` |
@@ -22,6 +23,7 @@ Se adopta desde el primer commit y se verifica de forma automática con Ruff (Py
 - Toda función pública lleva un *docstring* que indica qué hace y el RF o la regla de integridad (RI) que implementa.
 - Los comentarios explican el **porqué** de una decisión, no repiten lo que dice el código.
 - Tipado obligatorio en las firmas de funciones Python (type hints).
+- No se usa `assert` en el código de producción (se elimina al ejecutar Python con `-O`): las condiciones se expresan con flujo explícito o con excepciones.
 - Ningún secreto en el código: credenciales y cadenas de conexión se leen de variables de entorno (`.env`, no versionado).
 
 ## Principios SOLID y código limpio

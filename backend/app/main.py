@@ -3,7 +3,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import requerimientos
 from app.core.config import obtener_configuracion
+from app.core.errores import registrar_manejadores
 
 config = obtener_configuracion()
 
@@ -22,6 +24,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT"],
     allow_headers=["Content-Type"],
 )
+registrar_manejadores(app)
+app.include_router(requerimientos.router, prefix="/api/v1")
 
 
 @app.get("/api/v1/salud", tags=["sistema"])
