@@ -157,18 +157,20 @@ def _persistir_saldos(sesion: Session, carga: CargaDatos, filas: list[dict]) -> 
 
 
 def resolver_ruta_segura(ruta: str, carpeta_base: str) -> str:
-    """Resuelve la ruta y exige que quede dentro de la carpeta base y sea un .csv.
+    """Canonaliza la ruta y exige que quede dentro de la carpeta base y sea un .csv.
 
-    Evita el recorrido de directorios (path traversal, CWE-22): una ruta como ../../.env
-    no puede leer archivos fuera de la carpeta de trabajo (hallazgo de SonarQube).
+    Evita el recorrido de directorios (path traversal, CWE-22; regla pythonsecurity:S8707 de
+    SonarQube): primero se resuelve la ruta canónica con realpath, que elimina los "../" y los
+    enlaces simbólicos, y luego se verifica que empiece por la carpeta base seguida del
+    separador, para impedir también el recorrido parcial (/base/dir-secreto).
     """
+    resuelta = os.path.realpath(ruta)
     base = os.path.realpath(carpeta_base)
-    real = os.path.realpath(os.path.join(base, ruta))
-    if os.path.commonpath([base, real]) != base:
-        raise ValueError("El archivo debe estar dentro de la carpeta de trabajo.")
-    if not real.lower().endswith(".csv"):
+    if not resuelta.startswith(base + os.sep):
+        raise ValueError(f"El archivo {ruta!r} está fuera de la carpeta de trabajo.")
+    if not resuelta.lower().endswith(".csv"):
         raise ValueError("El archivo debe tener extensión .csv.")
-    return real
+    return resuelta
 
 
 def main(argv: list[str]) -> int:

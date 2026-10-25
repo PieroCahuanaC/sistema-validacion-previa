@@ -53,9 +53,14 @@ def test_cpu25_archivo_sin_filas_se_rechaza():
 
 
 def test_cpu26_ruta_fuera_de_la_carpeta_de_trabajo_se_rechaza(tmp_path):
-    (tmp_path / "saldos.csv").write_text("x", encoding="utf-8")
-    assert resolver_ruta_segura("saldos.csv", str(tmp_path)).endswith("saldos.csv")
-    with pytest.raises(ValueError, match="carpeta de trabajo"):
-        resolver_ruta_segura("../../.env.csv", str(tmp_path))
+    base = tmp_path / "cargas"
+    base.mkdir()
+    archivo = base / "saldos.csv"
+    archivo.write_text("x", encoding="utf-8")
+    assert resolver_ruta_segura(str(archivo), str(base)).endswith("saldos.csv")
+    with pytest.raises(ValueError, match="fuera de la carpeta"):
+        resolver_ruta_segura(str(base / ".." / "otro.csv"), str(base))
+    with pytest.raises(ValueError, match="fuera de la carpeta"):  # recorrido parcial
+        resolver_ruta_segura(str(tmp_path / "cargas-secreto" / "x.csv"), str(base))
     with pytest.raises(ValueError, match=".csv"):
-        resolver_ruta_segura(".env", str(tmp_path))
+        resolver_ruta_segura(str(base / ".env"), str(base))
