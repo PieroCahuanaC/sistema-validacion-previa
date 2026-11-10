@@ -23,6 +23,10 @@ class Requerimiento(Base):
     monto_estimado: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     fecha_necesidad: Mapped[date]
     fecha_registro: Mapped[datetime]
+    # Paso 2 (cambio 15 de la Práctica 7): se completan solo con semáforo vigente verde.
+    plazo_entrega_dias: Mapped[int | None]
+    lugar_entrega: Mapped[str | None] = mapped_column(String(250))
+    fecha_envio: Mapped[datetime | None]
 
     items: Mapped[list["RequerimientoItem"]] = relationship(
         order_by="RequerimientoItem.id_item", lazy="selectin"
@@ -39,6 +43,7 @@ class RequerimientoItem(Base):
     cantidad: Mapped[Decimal] = mapped_column(Numeric(12, 2))
     precio_unitario_ref: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     fuente_precio: Mapped[str] = mapped_column(String(20))
+    especificacion: Mapped[str | None] = mapped_column(String(1000))
 
 
 class ValidacionPresupuestal(Base):
@@ -52,6 +57,19 @@ class ValidacionPresupuestal(Base):
     monto_evaluado: Mapped[Decimal] = mapped_column(Numeric(14, 2))
     estado_semaforo: Mapped[str] = mapped_column(String(5))
     motivo: Mapped[str] = mapped_column(String(30))
+
+
+class DecisionPresupuesto(Base):
+    """Decisión del Jefe de Presupuesto sobre un ámbar (CU-06); solo inserción (RI-22)."""
+
+    __tablename__ = "decision_presupuesto"
+
+    id_decision: Mapped[int] = mapped_column(primary_key=True)
+    id_validacion: Mapped[int] = mapped_column(
+        ForeignKey("validacion_presupuestal.id_validacion"))
+    resultado: Mapped[str] = mapped_column(String(12))
+    sustento: Mapped[str | None] = mapped_column(String(500))
+    fecha_hora: Mapped[datetime]
 
 
 class HistorialEtapa(Base):

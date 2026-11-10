@@ -64,6 +64,8 @@ TRANSICIONES = [
     ("CERTIFICADO", "ORDEN_EMITIDA", "JL", "AVANCE"),
     ("REGISTRADO", "ANULADO", "AU", "ANULACION"),
     ("DOCUMENTACION_VALIDADA", "REGISTRADO", "JL", "DEVOLUCION"),
+    # Cambio 16 de la Práctica 7: Presupuesto registra que no hay disponibilidad al certificar.
+    ("CUADRO_REGISTRADO", "ANULADO", "JP", "ANULACION"),
 ]
 TIPOS_DOCUMENTO = [
     "Documento de requerimiento",
