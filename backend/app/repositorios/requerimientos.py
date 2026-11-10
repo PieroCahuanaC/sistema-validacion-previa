@@ -3,7 +3,12 @@
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
-from app.modelos.requerimiento import HistorialEtapa, Requerimiento, ValidacionPresupuestal
+from app.modelos.requerimiento import (
+    DecisionPresupuesto,
+    HistorialEtapa,
+    Requerimiento,
+    ValidacionPresupuestal,
+)
 
 
 class RepositorioRequerimientos:
@@ -30,6 +35,12 @@ class RepositorioRequerimientos:
             .order_by(ValidacionPresupuestal.fecha_hora.desc(),
                       ValidacionPresupuestal.id_validacion.desc())
             .limit(1)
+        )
+
+    def decision(self, id_validacion: int) -> DecisionPresupuesto | None:
+        """Decisión de Presupuesto sobre una validación en ámbar (relación 1:1, R16)."""
+        return self._sesion.scalar(
+            select(DecisionPresupuesto).where(DecisionPresupuesto.id_validacion == id_validacion)
         )
 
     def historial(self, id_requerimiento: int) -> list[HistorialEtapa]:
