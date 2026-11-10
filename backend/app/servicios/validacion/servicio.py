@@ -11,7 +11,14 @@ from sqlalchemy.orm import Session
 
 from app.core.errores import DatosNoValidos, ErrorNegocio, NoEncontrado
 from app.core.reloj import Reloj, fecha_local
-from app.esquemas.requerimiento import RequerimientoEntrada, ResultadoRegistro
+from app.esquemas.requerimiento import (
+    DocumentosEnvio,
+    EnvioEntrada,
+    Paso2Entrada,
+    RequerimientoEntrada,
+    ResultadoEnvio,
+    ResultadoRegistro,
+)
 from app.modelos.presupuesto import CargaDatos, MetaPresupuestal, SaldoMeta
 from app.modelos.requerimiento import (
     HistorialEtapa,
@@ -32,6 +39,7 @@ from app.servicios.validacion.regla_semaforo import (
     evaluar_semaforo,
     opciones_de_ajuste,
 )
+from app.servicios.validacion.vigencia import SemaforoVigente, semaforo_vigente
 
 
 class ServicioValidacion:
@@ -128,6 +136,85 @@ class ServicioValidacion:
             estado_semaforo=resultado.estado, motivo=resultado.motivo,
         ))
         return resultado, saldo, carga
+
+    # --- Paso 2 y envío (cambio 15 de la Práctica 7) ---------------------------------------
+    def vigente(self, requerimiento: Requerimiento) -> tuple[SemaforoVigente, bool]:
+        """Semáforo vigente (RI-20) e indicación de si lo confirmó Presupuesto."""
+        validacion = self._requerimientos.ultima_validacion(requerimiento.id_requerimiento)
+        if validacion is None:
+            raise RuntimeError("Todo requerimiento tiene al menos una validación (R12).")
+        decision = self._requerimientos.decision(validacion.id_validacion)
+        resultado = decision.resultado if decision else None
+        estado = semaforo_vigente(validacion.estado_semaforo, resultado)
+        return estado, validacion.estado_semaforo == "AMBAR" and resultado == "CONFIRMADA"
+
+    def guardar_paso_2(
+        self, id_requerimiento: int, datos: Paso2Entrada, usuario: UsuarioActual
+    ) -> Requerimiento:
+        """«Guardar y continuar después»: guarda el paso 2 sin enviar; admite datos parciales."""
+        requerimiento = self._requerimiento_con_paso_2_habilitado(id_requerimiento, usuario)
+        self._aplicar_paso_2(requerimiento, datos)
+        self._sesion.commit()
+        return requerimiento
+
+    def enviar(
+        self, id_requerimiento: int, datos: EnvioEntrada, usuario: UsuarioActual
+    ) -> ResultadoEnvio:
+        """«Enviar a la Gerencia de Administración»: desde aquí corre su plazo de 24 horas."""
+        requerimiento = self._requerimiento_con_paso_2_habilitado(id_requerimiento, usuario)
+        self._aplicar_paso_2(requerimiento, datos)
+        faltantes = self._faltantes_para_enviar(requerimiento, datos.documentos)
+        if faltantes:
+            self._sesion.rollback()
+            raise DatosNoValidos("Complete el paso 2 antes de enviar: " + "; ".join(faltantes)
+                                 + ".")
+        requerimiento.fecha_envio = self._reloj()
+        self._sesion.commit()
+        return ResultadoEnvio(requerimiento_id=requerimiento.id_requerimiento,
+                              codigo=requerimiento.codigo, fecha_envio=requerimiento.fecha_envio)
+
+    def _requerimiento_con_paso_2_habilitado(
+        self, id_requerimiento: int, usuario: UsuarioActual
+    ) -> Requerimiento:
+        requerimiento = self.obtener_para_usuario(id_requerimiento, usuario)
+        estado = self._catalogos.estado("REGISTRADO")
+        if estado is None or requerimiento.id_estado_actual != estado.id_estado:
+            raise ErrorNegocio(409, "Conflicto",
+                               "El paso 2 solo se completa con el requerimiento en Registrado.")
+        if requerimiento.fecha_envio is not None:
+            raise ErrorNegocio(409, "Conflicto",
+                               "El requerimiento ya fue enviado a la Gerencia de Administración.")
+        vigente, _ = self.vigente(requerimiento)
+        if vigente != SemaforoVigente.VERDE:
+            raise ErrorNegocio(409, "Conflicto",
+                               "El paso 2 solo se habilita con semáforo vigente verde.")
+        return requerimiento
+
+    @staticmethod
+    def _aplicar_paso_2(requerimiento: Requerimiento, datos: Paso2Entrada) -> None:
+        items = {i.id_item: i for i in requerimiento.items}
+        for entrada in datos.items:
+            item = items.get(entrada.id_item)
+            if item is None:
+                raise DatosNoValidos(f"El ítem {entrada.id_item} no pertenece al requerimiento.")
+            item.especificacion = entrada.especificacion or None
+        requerimiento.plazo_entrega_dias = datos.plazo_entrega_dias
+        requerimiento.lugar_entrega = datos.lugar_entrega or None
+
+    @staticmethod
+    def _faltantes_para_enviar(
+        requerimiento: Requerimiento, documentos: DocumentosEnvio
+    ) -> list[str]:
+        faltantes = []
+        if any(not i.especificacion for i in requerimiento.items):
+            faltantes.append("falta la especificación técnica de algún ítem")
+        if requerimiento.plazo_entrega_dias is None:
+            faltantes.append("falta el plazo de entrega")
+        if requerimiento.lugar_entrega is None:
+            faltantes.append("falta el lugar de entrega")
+        if not all(documentos.model_dump().values()):
+            faltantes.append("marque los tres documentos que se adjuntan al expediente")
+        return faltantes
 
     # --- CU-04: detalle ------------------------------------------------------------------
     def obtener_para_usuario(self, id_requerimiento: int, usuario: UsuarioActual) -> Requerimiento:

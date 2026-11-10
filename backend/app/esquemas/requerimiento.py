@@ -35,6 +35,50 @@ class RequerimientoEntrada(BaseModel):
     pac_item_referencia: Annotated[str, StringConstraints(max_length=20)] | None
 
 
+TextoOpcional = Annotated[str, StringConstraints(strip_whitespace=True)]
+
+
+class EspecificacionItem(BaseModel):
+    """Especificación técnica de un ítem ya registrado en el paso 1 (no se cambia el ítem)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    id_item: int
+    especificacion: Annotated[TextoOpcional, StringConstraints(max_length=1000)] | None = None
+
+
+class Paso2Entrada(BaseModel):
+    """Paso 2 de la P03; se puede guardar incompleto con «Guardar y continuar después»."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    items: Annotated[list[EspecificacionItem], Field(max_length=50)] = []
+    plazo_entrega_dias: Annotated[int, Field(gt=0, le=32767)] | None = None
+    lugar_entrega: Annotated[TextoOpcional, StringConstraints(max_length=250)] | None = None
+
+
+class DocumentosEnvio(BaseModel):
+    """Casillas de los documentos que se adjuntan al expediente físico (no se almacenan)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    documento_requerimiento_firmado: bool
+    cuadro_necesidades: bool
+    especificaciones_tecnicas_tdr: bool
+
+
+class EnvioEntrada(Paso2Entrada):
+    """«Enviar a la Gerencia de Administración»: guarda el paso 2 y lo envía en un solo acto."""
+
+    documentos: DocumentosEnvio
+
+
+class ResultadoEnvio(BaseModel):
+    requerimiento_id: int
+    codigo: str
+    fecha_envio: datetime
+
+
 class ResultadoRegistro(BaseModel):
     requerimiento_id: int
     codigo: str
@@ -48,7 +92,9 @@ class ResultadoRegistro(BaseModel):
 
 
 class ItemSalida(BaseModel):
+    id_item: int
     descripcion: str
+    especificacion: str | None
     unidad_medida: str
     cantidad: Decimal
     precio_unitario_ref: Decimal
@@ -104,6 +150,14 @@ class RequerimientoDetalle(BaseModel):
     items: list[ItemSalida]
     etapas: list[EtapaSalida]
     semaforo: SemaforoSalida
+    # Semáforo vigente (RI-20): el calculado, corregido por la decisión de Presupuesto.
+    semaforo_vigente: str
+    confirmado_por_presupuesto: bool
+    # Paso 2 (cambio 15 de la Práctica 7).
+    plazo_entrega_dias: int | None
+    lugar_entrega: str | None
+    fecha_envio: datetime | None
+    puede_completar_paso_2: bool
 
 
 class MetaSalida(BaseModel):

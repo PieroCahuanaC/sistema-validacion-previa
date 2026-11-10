@@ -1,4 +1,4 @@
-"""Endpoints del incremento 1: registro y consulta del requerimiento, metas y PAC.
+"""Endpoints de la validación presupuestal: registro en dos pasos, consulta, metas y PAC.
 
 Cada endpoint solo valida la entrada (DTO), verifica el rol y delega en el servicio.
 """
@@ -11,11 +11,14 @@ from sqlalchemy.orm import Session
 from app.core.db import obtener_sesion
 from app.core.reloj import Reloj, fecha_local, obtener_reloj
 from app.esquemas.requerimiento import (
+    EnvioEntrada,
     MetaSalida,
     PacItemSalida,
+    Paso2Entrada,
     ReglaVigenteSalida,
     RequerimientoDetalle,
     RequerimientoEntrada,
+    ResultadoEnvio,
     ResultadoRegistro,
 )
 from app.seguridad.dependencias import UsuarioActual, requiere_rol
@@ -50,6 +53,32 @@ def detalle_requerimiento(
     servicio = ServicioValidacion(sesion, reloj)
     requerimiento = servicio.obtener_para_usuario(id_requerimiento, usuario)
     return construir_detalle(sesion, requerimiento)
+
+
+@router.put("/requerimientos/{id_requerimiento}/paso-2", response_model=RequerimientoDetalle)
+def guardar_paso_2(
+    id_requerimiento: int, datos: Paso2Entrada, usuario: AreaUsuaria, sesion: SesionDep,
+    reloj: RelojDep,
+) -> RequerimientoDetalle:
+    """Guarda el paso 2 sin enviar: especificaciones, plazo y lugar de entrega (P03, paso 2).
+
+    Responde 409 si el semáforo vigente no es verde o si el requerimiento ya fue enviado.
+    """
+    requerimiento = ServicioValidacion(sesion, reloj).guardar_paso_2(id_requerimiento, datos,
+                                                                     usuario)
+    return construir_detalle(sesion, requerimiento)
+
+
+@router.post("/requerimientos/{id_requerimiento}/envio", response_model=ResultadoEnvio)
+def enviar_requerimiento(
+    id_requerimiento: int, datos: EnvioEntrada, usuario: AreaUsuaria, sesion: SesionDep,
+    reloj: RelojDep,
+) -> ResultadoEnvio:
+    """Envía el requerimiento a la Gerencia de Administración (P03, paso 2; RI-20 y RI-28).
+
+    Exige semáforo vigente verde, el paso 2 completo y los tres documentos marcados.
+    """
+    return ServicioValidacion(sesion, reloj).enviar(id_requerimiento, datos, usuario)
 
 
 @router.get("/metas", response_model=list[MetaSalida])

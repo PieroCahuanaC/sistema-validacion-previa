@@ -28,16 +28,20 @@ from app.servicios.validacion.regla_semaforo import (
     calcular_saldo_disponible,
     opciones_de_ajuste,
 )
+from app.servicios.validacion.vigencia import SemaforoVigente, semaforo_vigente
 
 ESTADOS_DEL_RECORRIDO = ("REGISTRADO", "APROBADO", "DOCUMENTACION_VALIDADA",
                          "CUADRO_REGISTRADO", "CERTIFICADO", "ORDEN_EMITIDA")
 
-# Mientras el requerimiento está en REGISTRADO, quién actúa depende del semáforo vigente.
+# Mientras el requerimiento está en REGISTRADO, quién actúa depende del semáforo vigente
+# (RI-20) y de si el Área Usuaria ya lo envió desde el paso 2 (cambio 15 de la Práctica 7).
 PENDIENTE_POR_SEMAFORO = {
-    Semaforo.VERDE: ("GA", "Aprobar u observar el requerimiento"),
-    Semaforo.AMBAR: ("JP", "Confirmar o denegar la disponibilidad presupuestal"),
-    Semaforo.ROJO: ("AU", "Aplicar un ajuste al requerimiento"),
+    SemaforoVigente.AMBAR_PENDIENTE: ("JP", "Confirmar o denegar la disponibilidad presupuestal"),
+    SemaforoVigente.AMBAR_DENEGADO: ("AU", "Anular el requerimiento"),
+    SemaforoVigente.ROJO: ("AU", "Aplicar un ajuste al requerimiento"),
 }
+PENDIENTE_VERDE_SIN_ENVIAR = ("AU", "Completar el paso 2 y enviar a la Gerencia de Administración")
+PENDIENTE_VERDE_ENVIADO = ("GA", "Aprobar u observar el requerimiento")
 
 
 def _rol_a_cargo(estado: Estado, transiciones: list[Transicion], roles: dict[int, Rol]) -> str:
@@ -50,15 +54,21 @@ def _rol_a_cargo(estado: Estado, transiciones: list[Transicion], roles: dict[int
     return "—"
 
 
+def _pendiente_en_registrado(vigente: SemaforoVigente, enviado: bool) -> tuple[str, str]:
+    if vigente == SemaforoVigente.VERDE:
+        return PENDIENTE_VERDE_ENVIADO if enviado else PENDIENTE_VERDE_SIN_ENVIAR
+    return PENDIENTE_POR_SEMAFORO[vigente]
+
+
 def _responsable(
-    estado: Estado, semaforo: Semaforo, transiciones: list[Transicion], roles: dict[int, Rol],
-    estados: dict[int, Estado],
+    estado: Estado, vigente: SemaforoVigente, enviado: bool, transiciones: list[Transicion],
+    roles: dict[int, Rol], estados: dict[int, Estado],
 ) -> tuple[str, str]:
     por_codigo = {r.codigo: r.nombre for r in roles.values()}
     if estado.es_final:
         return "—", "Trámite cerrado"
     if estado.codigo == "REGISTRADO":
-        codigo_rol, accion = PENDIENTE_POR_SEMAFORO[semaforo]
+        codigo_rol, accion = _pendiente_en_registrado(vigente, enviado)
         return por_codigo[codigo_rol], accion
     if estado.codigo == "OBSERVADO":
         return por_codigo["AU"], "Subsanar la observación y reenviar"
@@ -86,8 +96,12 @@ def construir_detalle(sesion: Session, requerimiento: Requerimiento) -> Requerim
     # Se usa la versión de la regla con la que se calculó el semáforo, no la vigente (R14).
     semaforo = _semaforo(presupuesto, requerimiento, validacion,
                          ParametrosRegla.desde_json(regla.parametros))
-    responsable, accion = _responsable(estado_actual, Semaforo(semaforo.estado), transiciones,
-                                       roles, estados)
+    decision = requerimientos.decision(validacion.id_validacion)
+    resultado_decision = decision.resultado if decision else None
+    vigente = semaforo_vigente(validacion.estado_semaforo, resultado_decision)
+    enviado = requerimiento.fecha_envio is not None
+    responsable, accion = _responsable(estado_actual, vigente, enviado, transiciones, roles,
+                                       estados)
 
     historial = {h.id_estado: h for h in requerimientos.historial(requerimiento.id_requerimiento)}
     etapas = []
@@ -114,11 +128,19 @@ def construir_detalle(sesion: Session, requerimiento: Requerimiento) -> Requerim
         fecha_necesidad=requerimiento.fecha_necesidad,
         fecha_registro=requerimiento.fecha_registro, estado_actual=estado_actual.nombre,
         responsable_actual=responsable, accion_pendiente=accion,
-        items=[ItemSalida(descripcion=i.descripcion, unidad_medida=i.unidad_medida,
+        items=[ItemSalida(id_item=i.id_item, descripcion=i.descripcion,
+                          especificacion=i.especificacion, unidad_medida=i.unidad_medida,
                           cantidad=i.cantidad, precio_unitario_ref=i.precio_unitario_ref,
                           fuente_precio=i.fuente_precio, subtotal=subtotal(i))
                for i in requerimiento.items],
         etapas=etapas, semaforo=semaforo,
+        semaforo_vigente=vigente,
+        confirmado_por_presupuesto=(validacion.estado_semaforo == "AMBAR"
+                                    and resultado_decision == "CONFIRMADA"),
+        plazo_entrega_dias=requerimiento.plazo_entrega_dias,
+        lugar_entrega=requerimiento.lugar_entrega, fecha_envio=requerimiento.fecha_envio,
+        puede_completar_paso_2=(estado_actual.codigo == "REGISTRADO" and not enviado
+                                and vigente == SemaforoVigente.VERDE),
     )
 
 

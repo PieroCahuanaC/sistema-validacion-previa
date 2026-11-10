@@ -1,10 +1,12 @@
-// P03. Registrar requerimiento (CU-03, RF-01). Al registrar, el sistema ejecuta la validación
-// presupuestal (CU-01) y abre la P04 con el resultado.
+// P03. Registrar requerimiento, paso 1 (CU-03, RF-01). Al registrar, el sistema ejecuta la
+// validación presupuestal (CU-01) y abre la P04 con el resultado; con semáforo verde se habilita
+// el paso 2 (especificaciones y documentos), según el cambio 15 de la Práctica 7.
 // Hallazgo H2 de la prueba de usabilidad: los campos son editables y "Registrar y validar" solo
 // se habilita cuando los campos obligatorios son válidos (Tabla 4 de la Práctica 7).
 import { useEffect, useMemo, useState } from "react";
 import { api, ErrorApi, type ItemEntrada, type Meta, type PacItem } from "../lib/api";
 import { formatoFecha, formatoSoles, hoyLima } from "../lib/formato";
+import PasosRegistro from "./PasosRegistro";
 
 const UNIDADES = ["unidad", "bolsa", "galón", "kilogramo", "metro", "metro lineal", "caja", "paquete", "día", "servicio"];
 const itemVacio = (): ItemEntrada => ({
@@ -73,7 +75,13 @@ export default function FormularioRequerimiento() {
   }
 
   return (
-    <form onSubmit={registrar} className="max-w-5xl space-y-5 rounded border border-linea bg-superficie p-5">
+    <div className="max-w-5xl">
+    <PasosRegistro actual={1} />
+    <p className="mb-4 rounded border border-linea bg-fondo p-3 text-sm">
+      Primero se valida el presupuesto; las especificaciones y los documentos se completan después, solo si el
+      semáforo es verde. Los campos marcados con * son obligatorios.
+    </p>
+    <form onSubmit={registrar} className="space-y-5 rounded border border-linea bg-superficie p-5">
       {errorEnvio && (
         <div role="alert" className="rounded border border-rojo bg-rojo-suave p-3 text-sm">
           <p className="font-semibold">{errorEnvio.message}</p>
@@ -127,7 +135,7 @@ export default function FormularioRequerimiento() {
           <table className="w-full text-sm">
             <thead className="bg-fondo text-left">
               <tr>
-                <th className="p-2">Ítem (descripción y especificación)</th><th className="p-2">Unidad</th>
+                <th className="p-2">Ítem (descripción breve)</th><th className="p-2">Unidad</th>
                 <th className="p-2">Cantidad</th><th className="p-2">P. unit. ref. (S/)</th>
                 <th className="p-2">Fuente del precio</th><th className="p-2 text-right">Subtotal</th><th className="p-2" />
               </tr>
@@ -215,13 +223,19 @@ export default function FormularioRequerimiento() {
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 border-t border-linea pt-4">
-        <a href="/requerimientos/nuevo" className="rounded border border-linea px-4 py-2 hover:bg-fondo">Cancelar</a>
-        <button type="submit" disabled={!valido || enviando}
-          className="rounded bg-accion px-4 py-2 font-semibold text-white hover:bg-accion-hover disabled:cursor-not-allowed disabled:opacity-40">
-          {enviando ? "Registrando…" : "Registrar y validar"}
-        </button>
+      <div className="border-t border-linea pt-4">
+        <div className="flex justify-end gap-3">
+          <a href="/requerimientos/nuevo" className="rounded border border-linea px-4 py-2 hover:bg-fondo">Cancelar</a>
+          <button type="submit" disabled={!valido || enviando}
+            className="rounded bg-accion px-4 py-2 font-semibold text-white hover:bg-accion-hover disabled:cursor-not-allowed disabled:opacity-40">
+            {enviando ? "Registrando…" : "Registrar y validar presupuesto"}
+          </button>
+        </div>
+        <p className="mt-2 text-right text-xs text-pizarra">
+          Al registrar, el sistema valida el saldo presupuestal y muestra el semáforo. Si es verde, se habilita el paso 2.
+        </p>
       </div>
     </form>
+    </div>
   );
 }

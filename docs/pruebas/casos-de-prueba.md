@@ -33,6 +33,11 @@ no previsto en PAC = ámbar, antigüedad máxima 7 días, UIT S/ 5 500 (tope S/ 
 | CP-U23 | `validar_csv` | RF-14 | Monto no numérico; código repetido | Dos errores |
 | CP-U24 | `validar_csv` | RF-14 | Tipo de objeto del PAC no válido | Error |
 | CP-U25 | `validar_csv` | RF-14 | Archivo sin filas | Error |
+| CP-U26 | `resolver_ruta_segura` | CWE-22 | Rutas con «..», recorrido parcial y otra extensión | Rechazadas |
+| CP-U27 | `semaforo_vigente` | RI-20 | VERDE con cualquier decisión | VERDE |
+| CP-U28 | `semaforo_vigente` | RI-20 | ÁMBAR con decisión CONFIRMADA | VERDE |
+| CP-U29 | `semaforo_vigente` | RI-20 | ÁMBAR sin decisión; ÁMBAR DENEGADA | AMBAR_PENDIENTE; AMBAR_DENEGADO |
+| CP-U30 | `semaforo_vigente` | RI-20 | ROJO | ROJO |
 
 ## Pruebas de integración (componentes unidos, con PostgreSQL)
 
@@ -44,7 +49,7 @@ no previsto en PAC = ámbar, antigüedad máxima 7 días, UIT S/ 5 500 (tope S/ 
 | CP-I04 | API → servicio → BD | RI-14, RI-15 | Monto de 85 000 | 422 Problem Details; nada guardado |
 | CP-I05 | Frontera de la API (DTO) | RNF-03 | Sin ítems, objeto OBRA | 422 con los campos indicados |
 | CP-I06 | API → servicio → BD | RI-14 | Meta, PAC o fecha no válidos | 422 con el motivo |
-| CP-I07 | API → detalle → BD | CU-04 | Consulta de un requerimiento | Etapas, responsable y base de cálculo |
+| CP-I07 | API → detalle → BD | CU-04 | Consulta de un requerimiento verde sin enviar | Etapas, base de cálculo; responsable Área Usuaria (completar el paso 2) |
 | CP-I08 | Seguridad → servicio | RBAC, OWASP A01 | Usuario de otra unidad | 404 |
 | CP-I09 | API → consultas → BD | RF-01 (P03) | Metas y PAC | Saldo 31 500; 5 ítems |
 | CP-I10 | Seguridad | RF-10, RNF-03 | Rol Jefe de Presupuesto | 403 |
@@ -52,3 +57,16 @@ no previsto en PAC = ámbar, antigüedad máxima 7 días, UIT S/ 5 500 (tope S/ 
 | CP-I12 | BD (disparador diferido) | RI-14 | Monto distinto de la suma | Rechazado al confirmar |
 | CP-I13 | BD (CHECK) | RI-09 | Compromiso > certificación | Rechazado |
 | CP-I14 | Carga CSV → BD | RF-14, R01 | CSV inválido | Carga RECHAZADA, sin saldos |
+
+## Registro en dos pasos (cambio 15 de la Práctica 7)
+
+| ID | Integración que verifica | RF / regla | Entrada | Resultado esperado |
+|---|---|---|---|---|
+| CP-I15 | API → servicio → BD | RF-01 (paso 2) | Guardar solo el plazo de entrega | 200; datos guardados, sin enviar |
+| CP-I16 | API → servicio → BD | RF-01, RI-20 | Paso 2 completo, tres documentos, semáforo verde | 200; fecha de envío; responsable Gerencia de Administración |
+| CP-I17 | API → servicio → BD | RF-01 | Envío sin un documento; envío sin especificación ni lugar | 422 con lo que falta; nada enviado |
+| CP-I18 | API → servicio → BD | RI-20 | Paso 2 con semáforo rojo y con ámbar sin decisión | 409 «solo con semáforo vigente verde» |
+| CP-I19 | API → detalle → BD | RI-20, CU-06 | Ámbar confirmado por Presupuesto | Semáforo vigente verde; paso 2 habilitado |
+| CP-I20 | API → servicio → BD | RF-01 | Segundo envío; edición después del envío | 409 |
+| CP-I21 | API y BD (CHECK) | RI-28 | Ítem de otro requerimiento; fecha de envío sin paso 2 | 422; rechazado por la base de datos |
+

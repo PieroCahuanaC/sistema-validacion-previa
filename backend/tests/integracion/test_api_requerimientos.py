@@ -75,7 +75,10 @@ def test_cpi07_detalle_muestra_etapas_responsable_y_base_de_calculo(cliente, cue
     detalle = cliente.get(f"/api/v1/requerimientos/{rid}").json()
     assert [e["codigo"] for e in detalle["etapas"]][0] == "REGISTRADO"
     assert detalle["etapas"][0]["cumplida"] and detalle["etapas"][0]["actual"]
-    assert detalle["responsable_actual"] == "Gerencia de Administración"
+    # Desde el cambio 15 de la Práctica 7, un verde sin enviar le toca al Área Usuaria (paso 2).
+    assert detalle["responsable_actual"] == "Área Usuaria"
+    assert detalle["accion_pendiente"].startswith("Completar el paso 2")
+    assert detalle["puede_completar_paso_2"] and detalle["fecha_envio"] is None
     assert detalle["semaforo"]["base_calculo"]["pim"] == "180000.00"
 
 
