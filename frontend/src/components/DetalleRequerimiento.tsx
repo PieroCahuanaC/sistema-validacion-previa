@@ -65,6 +65,7 @@ export default function DetalleRequerimiento() {
   const [ayuda, setAyuda] = useState(false);
   const parametros = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const registrado = parametros?.get("registrado") === "1";
+  const enviado = parametros?.get("enviado") === "1";
 
   useEffect(() => {
     const id = Number(parametros?.get("id"));
@@ -88,6 +89,11 @@ export default function DetalleRequerimiento() {
           Requerimiento {detalle.codigo} registrado. El sistema validó su disponibilidad presupuestal.
         </p>
       )}
+      {enviado && (
+        <p role="status" className="rounded border border-verde bg-verde-suave p-3 text-sm">
+          Requerimiento {detalle.codigo} enviado a la Gerencia de Administración. Desde ahora corre su plazo de 24 horas.
+        </p>
+      )}
 
       <Etapas etapas={detalle.etapas} responsable={detalle.responsable_actual} accion={detalle.accion_pendiente} />
 
@@ -95,6 +101,9 @@ export default function DetalleRequerimiento() {
         <div className={`flex flex-wrap items-center gap-3 px-4 py-3 ${color.banda}`}>
           <span className="text-2xl font-bold">Semáforo {color.texto}</span>
           <span className="text-sm opacity-90">Validado el {formatoFechaHora(s.fecha_hora)}</span>
+          {detalle.confirmado_por_presupuesto && (
+            <span className="rounded bg-white/20 px-2 py-0.5 text-sm font-semibold">Verde · Confirmado por Presupuesto</span>
+          )}
           <button type="button" onClick={() => setAyuda(!ayuda)} aria-expanded={ayuda}
             className="ml-auto rounded-full border border-white/70 px-2.5 font-bold" title="¿Por qué este resultado?">?</button>
         </div>
@@ -112,6 +121,18 @@ export default function DetalleRequerimiento() {
               Previsto en el PAC: <strong>{b.previsto_en_pac ? `Sí (${b.pac_item_referencia})` : "No"}</strong>
               <br />Fecha de corte del dato: <strong>{formatoFecha(b.fecha_corte)}</strong>
             </p>
+            {detalle.puede_completar_paso_2 && (
+              <div className="mt-4">
+                <a href={`/requerimientos/nuevo?id=${detalle.requerimiento_id}`}
+                  className="inline-block rounded bg-accion px-4 py-2 font-semibold text-white hover:bg-accion-hover">Completar paso 2</a>
+                <p className="mt-1 text-xs text-pizarra">Registre las especificaciones y los documentos y envíe el requerimiento a la Gerencia de Administración.</p>
+              </div>
+            )}
+            {detalle.fecha_envio && (
+              <p className="mt-4 text-sm">
+                Enviado a la Gerencia de Administración el <strong>{formatoFechaHora(detalle.fecha_envio)}</strong>
+              </p>
+            )}
             {s.opciones_ajuste.length > 0 && (
               <div className="mt-4">
                 <button type="button" disabled title="La pantalla P05 se implementa en el siguiente incremento"

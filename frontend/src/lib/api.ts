@@ -23,7 +23,7 @@ export type Detalle = {
   meta_nombre: string; objeto_contratacion: string; descripcion: string; monto_estimado: string;
   fecha_necesidad: string; fecha_registro: string; estado_actual: string;
   responsable_actual: string; accion_pendiente: string;
-  items: (ItemEntrada & { subtotal: string })[];
+  items: (ItemEntrada & { id_item: number; especificacion: string | null; subtotal: string })[];
   etapas: Etapa[];
   semaforo: {
     estado: "VERDE" | "AMBAR" | "ROJO"; motivo: string; fecha_hora: string; opciones_ajuste: string[];
@@ -34,7 +34,23 @@ export type Detalle = {
       previsto_en_pac: boolean; pac_item_referencia: string | null;
     };
   };
+  // Semáforo vigente (RI-20) y paso 2 (cambio 15 de la Práctica 7).
+  semaforo_vigente: "VERDE" | "AMBAR_PENDIENTE" | "AMBAR_DENEGADO" | "ROJO";
+  confirmado_por_presupuesto: boolean;
+  plazo_entrega_dias: number | null;
+  lugar_entrega: string | null;
+  fecha_envio: string | null;
+  puede_completar_paso_2: boolean;
 };
+export type Paso2Entrada = {
+  items: { id_item: number; especificacion: string | null }[];
+  plazo_entrega_dias: number | null;
+  lugar_entrega: string | null;
+};
+export type Documentos = {
+  documento_requerimiento_firmado: boolean; cuadro_necesidades: boolean; especificaciones_tecnicas_tdr: boolean;
+};
+export type ResultadoEnvio = { requerimiento_id: number; codigo: string; fecha_envio: string };
 
 export class ErrorApi extends Error {
   constructor(mensaje: string, public estado: number, public errores: { campo: string; mensaje: string }[] = []) {
@@ -65,4 +81,8 @@ export const api = {
   registrar: (datos: RequerimientoEntrada) =>
     pedir<ResultadoRegistro>("/requerimientos", { method: "POST", body: JSON.stringify(datos) }),
   detalle: (id: number) => pedir<Detalle>(`/requerimientos/${id}`),
+  guardarPaso2: (id: number, datos: Paso2Entrada) =>
+    pedir<Detalle>(`/requerimientos/${id}/paso-2`, { method: "PUT", body: JSON.stringify(datos) }),
+  enviar: (id: number, datos: Paso2Entrada & { documentos: Documentos }) =>
+    pedir<ResultadoEnvio>(`/requerimientos/${id}/envio`, { method: "POST", body: JSON.stringify(datos) }),
 };

@@ -1,7 +1,7 @@
 ---
 import Plantilla from "../../layouts/Plantilla.astro";
-import FormularioRequerimiento from "../../components/FormularioRequerimiento";
+import RegistroRequerimiento from "../../components/RegistroRequerimiento";
 ---
 <Plantilla titulo="Registrar requerimiento" ruta={["Inicio", "Registrar requerimiento"]} activo="registrar">
-  <FormularioRequerimiento client:load />
+  <RegistroRequerimiento client:only="react" />
 </Plantilla>
