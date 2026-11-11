@@ -4,21 +4,28 @@ Un semáforo rojo o ámbar NO es un error: es un resultado válido de la regla d
 Los errores son solo las situaciones en las que el sistema no puede completar lo pedido.
 """
 
+import logging
+import uuid
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 TIPO_PROBLEMA = "application/problem+json"
+_registro = logging.getLogger("svp.errores")
 
 
 class ErrorNegocio(Exception):
     """Error controlado de la lógica de negocio, con su código HTTP."""
 
-    def __init__(self, estado_http: int, titulo: str, detalle: str) -> None:
+    def __init__(
+        self, estado_http: int, titulo: str, detalle: str, extra: dict | None = None
+    ) -> None:
         super().__init__(detalle)
         self.estado_http = estado_http
         self.titulo = titulo
         self.detalle = detalle
+        self.extra = extra
 
 
 class NoEncontrado(ErrorNegocio):
@@ -41,7 +48,7 @@ def _respuesta(estado: int, titulo: str, detalle: str, extra: dict | None = None
 def registrar_manejadores(app: FastAPI) -> None:
     @app.exception_handler(ErrorNegocio)
     async def _error_negocio(_: Request, exc: ErrorNegocio) -> JSONResponse:
-        return _respuesta(exc.estado_http, exc.titulo, exc.detalle)
+        return _respuesta(exc.estado_http, exc.titulo, exc.detalle, exc.extra)
 
     @app.exception_handler(RequestValidationError)
     async def _error_validacion(_: Request, exc: RequestValidationError) -> JSONResponse:
@@ -52,3 +59,14 @@ def registrar_manejadores(app: FastAPI) -> None:
         return _respuesta(
             422, "Datos de entrada no válidos", "Revise los campos indicados.", {"errores": errores}
         )
+
+    @app.exception_handler(Exception)
+    async def _error_inesperado(request: Request, exc: Exception) -> JSONResponse:
+        # El usuario ve solo un código de referencia; el detalle técnico queda en el registro
+        # del servidor con ese mismo código (P01, «Código de referencia»).
+        codigo = str(uuid.uuid4())
+        _registro.exception("Error no controlado %s en %s %s", codigo, request.method,
+                            request.url.path, exc_info=exc)
+        return _respuesta(500, "Error del sistema",
+                          "Ocurrió un error inesperado. Informe el código de referencia al "
+                          "Administrador del sistema.", {"codigo_referencia": codigo})

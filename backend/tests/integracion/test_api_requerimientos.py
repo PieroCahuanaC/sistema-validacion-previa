@@ -6,7 +6,6 @@ Integran DTO, seguridad, servicio, repositorios y base de datos para cumplir el 
 from sqlalchemy import func, select
 
 from app.modelos.requerimiento import HistorialEtapa, Requerimiento, ValidacionPresupuestal
-from app.seguridad.dependencias import UsuarioActual, usuario_actual
 
 
 def test_cpi01_registro_con_saldo_suficiente_devuelve_201_verde(cliente, cuerpo_base, sesion):
@@ -82,16 +81,10 @@ def test_cpi07_detalle_muestra_etapas_responsable_y_base_de_calculo(cliente, cue
     assert detalle["semaforo"]["base_calculo"]["pim"] == "180000.00"
 
 
-def test_cpi08_otra_unidad_no_puede_ver_el_requerimiento(cliente, cuerpo_base):
-    from app.main import app
-
+def test_cpi08_otra_unidad_no_puede_ver_el_requerimiento(cliente, como, cuerpo_base):
     rid = cliente.post("/api/v1/requerimientos", json=cuerpo_base).json()["requerimiento_id"]
-    original = app.dependency_overrides.copy()
-    app.dependency_overrides[usuario_actual] = lambda: UsuarioActual(None, 1, "AU", 9999)
-    try:
-        assert cliente.get(f"/api/v1/requerimientos/{rid}").status_code == 404
-    finally:
-        app.dependency_overrides = original
+    # Un usuario del Área Usuaria de otra unidad (GSP) no lo ve: 404, no 403 (OWASP A01).
+    assert como("AU2").get(f"/api/v1/requerimientos/{rid}").status_code == 404
 
 
 def test_cpi09_metas_y_pac_para_la_pantalla_p03(cliente):
@@ -103,12 +96,5 @@ def test_cpi09_metas_y_pac_para_la_pantalla_p03(cliente):
     assert regla["tope_8_uit"] == "44000.00"
 
 
-def test_cpi10_rol_no_autorizado_recibe_403(cliente):
-    from app.main import app
-
-    original = app.dependency_overrides.copy()
-    app.dependency_overrides[usuario_actual] = lambda: UsuarioActual(None, 4, "JP", None)
-    try:
-        assert cliente.get("/api/v1/metas").status_code == 403
-    finally:
-        app.dependency_overrides = original
+def test_cpi10_rol_no_autorizado_recibe_403(como):
+    assert como("JP").get("/api/v1/metas").status_code == 403

@@ -1,0 +1,7 @@
+---
+import Plantilla from "../layouts/Plantilla.astro";
+import GestionUsuarios from "../components/GestionUsuarios";
+---
+<Plantilla titulo="Gestionar usuarios" ruta={["Inicio", "Gestionar usuarios"]} activo="usuarios">
+  <GestionUsuarios client:only="react" />
+</Plantilla>

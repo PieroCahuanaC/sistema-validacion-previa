@@ -4,6 +4,7 @@ Cada ambiente tiene su propia base de datos; los valores se leen de variables
 de entorno y nunca se escriben en el código.
 """
 
+import secrets
 from functools import lru_cache
 from typing import Literal
 
@@ -19,13 +20,19 @@ class Configuracion(BaseSettings):
     database_url: str = ""
     cors_origins: str = "http://localhost:4321"
     zona_horaria: str = "America/Lima"
-    # Sigla de la unidad orgánica del usuario provisional del incremento 1.
-    usuario_provisional_unidad: str = "GDUR"
+    # Clave para firmar los tokens de acceso (JWT). Es un secreto: se define por ambiente
+    # (variable CLAVE_JWT en Render) y nunca se escribe en el código.
+    clave_jwt: str = ""
 
     @property
     def documentacion_habilitada(self) -> bool:
         """La documentación interactiva de la API solo se expone en desarrollo (CC-01)."""
         return self.ambiente == "desarrollo"
+
+    @property
+    def cookie_segura(self) -> bool:
+        """Atributo Secure de las cookies: siempre fuera del ambiente local de desarrollo."""
+        return self.ambiente != "desarrollo"
 
     @property
     def lista_cors(self) -> list[str]:
@@ -47,3 +54,18 @@ class Configuracion(BaseSettings):
 @lru_cache
 def obtener_configuracion() -> Configuracion:
     return Configuracion()
+
+
+@lru_cache
+def clave_firma() -> str:
+    """Clave de los JWT. Falla cerrada si falta fuera del ambiente de desarrollo.
+
+    En desarrollo, si no se define, se genera una al iniciar: las sesiones se pierden al
+    reiniciar el servidor, lo que es aceptable con datos mock.
+    """
+    config = obtener_configuracion()
+    if config.clave_jwt:
+        return config.clave_jwt
+    if config.ambiente != "desarrollo":
+        raise RuntimeError("Defina la variable CLAVE_JWT para firmar las sesiones.")
+    return secrets.token_hex(32)

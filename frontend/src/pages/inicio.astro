@@ -1,0 +1,7 @@
+---
+import Plantilla from "../layouts/Plantilla.astro";
+import Inicio from "../components/Inicio";
+---
+<Plantilla titulo="Inicio" ruta={["Inicio"]} activo="inicio">
+  <Inicio client:only="react" />
+</Plantilla>

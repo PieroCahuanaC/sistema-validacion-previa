@@ -2,17 +2,14 @@
 // Plantilla común de todas las pantallas (Práctica 7): barra superior con el botón ☰, el
 // nombre del sistema, la campana, el rol y el cierre de sesión; menú lateral plegable; ruta de
 // navegación, título y zona de mensajes.
+// La sesión, el rol y el menú se obtienen de la API en el navegador (islas BarraUsuario y
+// MenuLateral); sin sesión vigente el usuario vuelve a Iniciar sesión (P01).
 import "../styles/global.css";
+import BarraUsuario from "../components/BarraUsuario";
+import MenuLateral from "../components/MenuLateral";
 
 interface Props { titulo: string; ruta: string[]; activo: string }
 const { titulo, ruta, activo } = Astro.props;
-
-const menu = [
-  { id: "inicio", texto: "Inicio", href: null },
-  { id: "registrar", texto: "Registrar requerimiento", href: "/requerimientos/nuevo" },
-  { id: "mis", texto: "Mis requerimientos", href: null },
-  { id: "tablero", texto: "Tablero", href: null },
-];
 ---
 <!doctype html>
 <html lang="es">
@@ -28,30 +25,12 @@ const menu = [
     <header class="sticky top-0 z-20 flex h-14 items-center gap-3 border-b border-linea bg-tinta px-3 text-white">
       <button id="boton-menu" type="button" aria-controls="menu-lateral" aria-expanded="true"
         class="rounded px-2 py-1 text-xl hover:bg-white/10" title="Mostrar u ocultar el menú">☰</button>
-      <span class="font-semibold">Sistema presupuestal de validación previa</span>
-      <span class="ml-auto flex items-center gap-4 text-sm">
-        <span title="Los pendientes de su acción se habilitan en el siguiente incremento" aria-label="Pendientes">🔔</span>
-        <span>Área Usuaria · GDUR</span>
-        <button type="button" disabled class="cursor-not-allowed rounded border border-white/30 px-2 py-1 opacity-60"
-          title="El inicio de sesión (RF-10) se implementa en el siguiente incremento">Cerrar sesión</button>
-      </span>
+      <a href="/inicio" class="font-semibold hover:underline">Sistema presupuestal de validación previa</a>
+      <div class="ml-auto"><BarraUsuario client:only="react" /></div>
     </header>
     <div class="flex">
       <nav id="menu-lateral" aria-label="Menú del rol" class="w-60 shrink-0 border-r border-linea bg-superficie min-h-[calc(100vh-3.5rem)] p-3">
-        <ul class="space-y-1 text-sm">
-          {menu.map((op) => (
-            <li>
-              {op.href ? (
-                <a href={op.href} aria-current={op.id === activo ? "page" : undefined}
-                  class:list={["block rounded px-3 py-2",
-                    op.id === activo ? "bg-accion text-white font-semibold" : "hover:bg-fondo"]}>{op.texto}</a>
-              ) : (
-                <span class="block cursor-not-allowed rounded px-3 py-2 text-pizarra/60"
-                  title="Disponible en un siguiente incremento">{op.texto}</span>
-              )}
-            </li>
-          ))}
-        </ul>
+        <MenuLateral client:only="react" activo={activo} />
       </nav>
       <main class="min-w-0 flex-1 px-6 py-5">
         <p class="text-sm text-pizarra">{ruta.join(" / ")}</p>
