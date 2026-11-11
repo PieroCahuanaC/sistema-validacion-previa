@@ -21,7 +21,8 @@ from app.esquemas.requerimiento import (
     ResultadoEnvio,
     ResultadoRegistro,
 )
-from app.seguridad.dependencias import UsuarioActual, requiere_rol
+from app.seguridad.dependencias import UsuarioActual, contexto_peticion, requiere_rol
+from app.servicios.seguridad.bitacora import Contexto
 from app.servicios.validacion.consultas import listar_metas, listar_pac
 from app.servicios.validacion.detalle import construir_detalle
 from app.servicios.validacion.servicio import ServicioValidacion
@@ -31,28 +32,35 @@ router = APIRouter(tags=["validación presupuestal"])
 SesionDep = Annotated[Session, Depends(obtener_sesion)]
 RelojDep = Annotated[Reloj, Depends(obtener_reloj)]
 AreaUsuaria = Annotated[UsuarioActual, Depends(requiere_rol("AU"))]
+RolFuncional = Annotated[UsuarioActual, Depends(requiere_rol("AU", "GA", "JL", "JP"))]
+ContextoDep = Annotated[Contexto, Depends(contexto_peticion)]
 
 
 @router.post("/requerimientos", status_code=status.HTTP_201_CREATED,
              response_model=ResultadoRegistro)
 def registrar_requerimiento(
-    datos: RequerimientoEntrada, usuario: AreaUsuaria, sesion: SesionDep, reloj: RelojDep
+    datos: RequerimientoEntrada, usuario: AreaUsuaria, sesion: SesionDep, reloj: RelojDep,
+    contexto: ContextoDep,
 ) -> ResultadoRegistro:
     """Registra un requerimiento y obtiene su semáforo (CU-03, CU-01; RF-01 a RF-03).
 
     Un semáforo rojo o ámbar se responde con 201: es un resultado válido, no un error.
     """
-    return ServicioValidacion(sesion, reloj).registrar(datos, usuario)
+    return ServicioValidacion(sesion, reloj, contexto).registrar(datos, usuario)
 
 
 @router.get("/requerimientos/{id_requerimiento}", response_model=RequerimientoDetalle)
 def detalle_requerimiento(
-    id_requerimiento: int, usuario: AreaUsuaria, sesion: SesionDep, reloj: RelojDep
+    id_requerimiento: int, usuario: RolFuncional, sesion: SesionDep, reloj: RelojDep
 ) -> RequerimientoDetalle:
-    """Detalle del requerimiento con su semáforo y las etapas del trámite (CU-04)."""
+    """Detalle del requerimiento con su semáforo y las etapas del trámite (CU-04).
+
+    El Área Usuaria solo ve los de su unidad; los demás roles funcionales consultan cualquier
+    requerimiento (matriz de permisos de la Práctica 5).
+    """
     servicio = ServicioValidacion(sesion, reloj)
     requerimiento = servicio.obtener_para_usuario(id_requerimiento, usuario)
-    return construir_detalle(sesion, requerimiento)
+    return construir_detalle(sesion, requerimiento, usuario)
 
 
 @router.put("/requerimientos/{id_requerimiento}/paso-2", response_model=RequerimientoDetalle)
@@ -66,7 +74,7 @@ def guardar_paso_2(
     """
     requerimiento = ServicioValidacion(sesion, reloj).guardar_paso_2(id_requerimiento, datos,
                                                                      usuario)
-    return construir_detalle(sesion, requerimiento)
+    return construir_detalle(sesion, requerimiento, usuario)
 
 
 @router.post("/requerimientos/{id_requerimiento}/envio", response_model=ResultadoEnvio)

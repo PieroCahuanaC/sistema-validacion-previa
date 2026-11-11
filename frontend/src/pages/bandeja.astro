@@ -1,0 +1,7 @@
+---
+import Plantilla from "../layouts/Plantilla.astro";
+import BandejaAprobacion from "../components/BandejaAprobacion";
+---
+<Plantilla titulo="Bandeja de aprobación" ruta={["Inicio", "Bandeja de aprobación"]} activo="bandeja">
+  <BandejaAprobacion client:only="react" />
+</Plantilla>

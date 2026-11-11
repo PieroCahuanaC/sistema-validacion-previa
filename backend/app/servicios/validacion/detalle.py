@@ -7,9 +7,12 @@ la revisión de la Práctica 7.
 from sqlalchemy.orm import Session
 
 from app.esquemas.requerimiento import (
+    AccionesDisponibles,
     BaseCalculo,
+    DecisionRegistrada,
     EtapaSalida,
     ItemSalida,
+    ObservacionRecibida,
     RequerimientoDetalle,
     SemaforoSalida,
 )
@@ -18,6 +21,7 @@ from app.modelos.requerimiento import Requerimiento, ValidacionPresupuestal
 from app.repositorios.catalogos import RepositorioCatalogos
 from app.repositorios.presupuesto import RepositorioPresupuesto
 from app.repositorios.requerimientos import RepositorioRequerimientos
+from app.seguridad.dependencias import UsuarioActual
 from app.servicios.validacion.monto import subtotal
 from app.servicios.validacion.regla_semaforo import (
     Motivo,
@@ -28,7 +32,8 @@ from app.servicios.validacion.regla_semaforo import (
     calcular_saldo_disponible,
     opciones_de_ajuste,
 )
-from app.servicios.validacion.vigencia import SemaforoVigente, semaforo_vigente
+from app.servicios.validacion.situacion import Situacion, situacion
+from app.servicios.validacion.vigencia import SemaforoVigente
 
 ESTADOS_DEL_RECORRIDO = ("REGISTRADO", "APROBADO", "DOCUMENTACION_VALIDADA",
                          "CUADRO_REGISTRADO", "CERTIFICADO", "ORDEN_EMITIDA")
@@ -54,21 +59,32 @@ def _rol_a_cargo(estado: Estado, transiciones: list[Transicion], roles: dict[int
     return "—"
 
 
-def _pendiente_en_registrado(vigente: SemaforoVigente, enviado: bool) -> tuple[str, str]:
+def _pendiente_en_registrado(vigente: SemaforoVigente, enviado: bool,
+                             opcion_ajuste: str | None) -> tuple[str, str]:
     if vigente == SemaforoVigente.VERDE:
         return PENDIENTE_VERDE_ENVIADO if enviado else PENDIENTE_VERDE_SIN_ENVIAR
+    if vigente == SemaforoVigente.ROJO and opcion_ajuste == "NINGUNA":
+        return "AU", "Anular el requerimiento"
     return PENDIENTE_POR_SEMAFORO[vigente]
 
 
+def responsable_actual(sesion: Session, s: Situacion) -> tuple[str, str]:
+    """Rol que debe actuar ahora sobre el requerimiento y qué debe hacer (P04 y P07)."""
+    catalogos = RepositorioCatalogos(sesion)
+    return _responsable(s.estado, s.vigente, s.enviado, s.opcion_ajuste,
+                        catalogos.transiciones(), catalogos.roles_por_id(),
+                        {e.id_estado: e for e in catalogos.estados()})
+
+
 def _responsable(
-    estado: Estado, vigente: SemaforoVigente, enviado: bool, transiciones: list[Transicion],
-    roles: dict[int, Rol], estados: dict[int, Estado],
+    estado: Estado, vigente: SemaforoVigente, enviado: bool, opcion_ajuste: str | None,
+    transiciones: list[Transicion], roles: dict[int, Rol], estados: dict[int, Estado],
 ) -> tuple[str, str]:
     por_codigo = {r.codigo: r.nombre for r in roles.values()}
     if estado.es_final:
         return "—", "Trámite cerrado"
     if estado.codigo == "REGISTRADO":
-        codigo_rol, accion = _pendiente_en_registrado(vigente, enviado)
+        codigo_rol, accion = _pendiente_en_registrado(vigente, enviado, opcion_ajuste)
         return por_codigo[codigo_rol], accion
     if estado.codigo == "OBSERVADO":
         return por_codigo["AU"], "Subsanar la observación y reenviar"
@@ -78,7 +94,8 @@ def _responsable(
     return "—", "—"
 
 
-def construir_detalle(sesion: Session, requerimiento: Requerimiento) -> RequerimientoDetalle:
+def construir_detalle(sesion: Session, requerimiento: Requerimiento,
+                      usuario: UsuarioActual | None = None) -> RequerimientoDetalle:
     catalogos = RepositorioCatalogos(sesion)
     presupuesto = RepositorioPresupuesto(sesion)
     requerimientos = RepositorioRequerimientos(sesion)
@@ -86,24 +103,22 @@ def construir_detalle(sesion: Session, requerimiento: Requerimiento) -> Requerim
     roles = catalogos.roles_por_id()
     estados = {e.id_estado: e for e in catalogos.estados()}
     transiciones = catalogos.transiciones()
-    estado_actual = estados[requerimiento.id_estado_actual]
-    validacion = requerimientos.ultima_validacion(requerimiento.id_requerimiento)
-    if validacion is None:
-        raise RuntimeError("Todo requerimiento tiene al menos una validación (R12).")
+    actual = situacion(sesion, requerimiento)
+    estado_actual = actual.estado
+    validacion = actual.validacion
     regla = catalogos.obtener_regla(validacion.id_regla)
     if regla is None:
         raise RuntimeError("La validación referencia una regla inexistente (R14).")
     # Se usa la versión de la regla con la que se calculó el semáforo, no la vigente (R14).
     semaforo = _semaforo(presupuesto, requerimiento, validacion,
                          ParametrosRegla.desde_json(regla.parametros))
-    decision = requerimientos.decision(validacion.id_validacion)
-    resultado_decision = decision.resultado if decision else None
-    vigente = semaforo_vigente(validacion.estado_semaforo, resultado_decision)
-    enviado = requerimiento.fecha_envio is not None
-    responsable, accion = _responsable(estado_actual, vigente, enviado, transiciones, roles,
-                                       estados)
+    vigente = actual.vigente
+    enviado = actual.enviado
+    responsable, accion = _responsable(estado_actual, vigente, enviado, actual.opcion_ajuste,
+                                       transiciones, roles, estados)
 
-    historial = {h.id_estado: h for h in requerimientos.historial(requerimiento.id_requerimiento)}
+    registros = requerimientos.historial(requerimiento.id_requerimiento)
+    historial = {h.id_estado: h for h in registros}
     etapas = []
     for codigo in ESTADOS_DEL_RECORRIDO:
         estado = next(e for e in estados.values() if e.codigo == codigo)
@@ -116,6 +131,25 @@ def construir_detalle(sesion: Session, requerimiento: Requerimiento) -> Requerim
             rol_registro=roles[registro.id_rol].nombre if registro else None,
             observacion=registro.observacion if registro else None,
         ))
+
+    observacion_recibida = None
+    if estado_actual.codigo == "OBSERVADO" and registros:
+        ultimo = registros[-1]
+        observacion_recibida = ObservacionRecibida(
+            texto=ultimo.observacion or "", rol=roles[ultimo.id_rol].nombre,
+            fecha_hora=ultimo.fecha_hora)
+    decision = None
+    if actual.decision is not None:
+        decision = DecisionRegistrada(
+            resultado=actual.decision.resultado, sustento=actual.decision.sustento,
+            fecha_hora=actual.decision.fecha_hora,
+            rol=next(r.nombre for r in roles.values() if r.codigo == "JP"))
+    es_area_usuaria = usuario is None or usuario.codigo_rol == "AU"
+    acciones = AccionesDisponibles(
+        aplicar_ajuste=es_area_usuaria and actual.puede_aplicar_ajuste,
+        anular=es_area_usuaria and actual.puede_anular,
+        subsanar=es_area_usuaria and actual.puede_subsanar,
+    )
 
     meta = presupuesto.obtener_meta(requerimiento.id_meta)
     unidad = catalogos.obtener_unidad(requerimiento.id_unidad)
@@ -135,12 +169,14 @@ def construir_detalle(sesion: Session, requerimiento: Requerimiento) -> Requerim
                for i in requerimiento.items],
         etapas=etapas, semaforo=semaforo,
         semaforo_vigente=vigente,
-        confirmado_por_presupuesto=(validacion.estado_semaforo == "AMBAR"
-                                    and resultado_decision == "CONFIRMADA"),
+        confirmado_por_presupuesto=actual.confirmado_por_presupuesto,
         plazo_entrega_dias=requerimiento.plazo_entrega_dias,
         lugar_entrega=requerimiento.lugar_entrega, fecha_envio=requerimiento.fecha_envio,
-        puede_completar_paso_2=(estado_actual.codigo == "REGISTRADO" and not enviado
-                                and vigente == SemaforoVigente.VERDE),
+        puede_completar_paso_2=(es_area_usuaria and estado_actual.codigo == "REGISTRADO"
+                                and not enviado and vigente == SemaforoVigente.VERDE),
+        opcion_ajuste=actual.opcion_ajuste,
+        observacion_recibida=observacion_recibida, decision_presupuesto=decision,
+        acciones=acciones,
     )
 
 

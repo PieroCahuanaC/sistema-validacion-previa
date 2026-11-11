@@ -59,6 +59,20 @@ class ValidacionPresupuestal(Base):
     motivo: Mapped[str] = mapped_column(String(30))
 
 
+class AjusteRequerimiento(Base):
+    """Ajuste sugerido aplicado por el Área Usuaria a una validación en rojo (CU-05, RI-22)."""
+
+    __tablename__ = "ajuste_requerimiento"
+
+    id_ajuste: Mapped[int] = mapped_column(primary_key=True)
+    id_validacion: Mapped[int] = mapped_column(
+        ForeignKey("validacion_presupuestal.id_validacion"))
+    opcion: Mapped[str] = mapped_column(String(20))
+    monto_nuevo: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))
+    fecha_necesidad_nueva: Mapped[date | None]
+    fecha_hora: Mapped[datetime]
+
+
 class DecisionPresupuesto(Base):
     """Decisión del Jefe de Presupuesto sobre un ámbar (CU-06); solo inserción (RI-22)."""
 

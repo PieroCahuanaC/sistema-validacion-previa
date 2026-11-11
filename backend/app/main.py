@@ -4,7 +4,7 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1 import autenticacion, inicio, requerimientos, usuarios
+from app.api.v1 import autenticacion, inicio, requerimientos, tramite, usuarios
 from app.core.config import obtener_configuracion
 from app.core.errores import TIPO_PROBLEMA, registrar_manejadores
 
@@ -26,7 +26,7 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 registrar_manejadores(app)
-for modulo in (autenticacion, inicio, requerimientos, usuarios):
+for modulo in (autenticacion, inicio, requerimientos, tramite, usuarios):
     app.include_router(modulo.router, prefix="/api/v1")
 
 METODOS_QUE_MODIFICAN = frozenset({"POST", "PUT", "PATCH", "DELETE"})

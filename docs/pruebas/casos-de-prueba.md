@@ -1,4 +1,4 @@
-# Casos de prueba — Incrementos 1 y 2 (validación presupuestal temprana; seguridad y acceso)
+# Casos de prueba — Incrementos 1 a 3 (validación presupuestal; seguridad y acceso; trámite)
 
 Datos de prueba: mock (semillas). Meta 0012: PIM 180 000, certificación 152 000, compromiso anual
 148 500, saldo presupuestal disponible 31 500. Regla inicial: umbral 100 %, columna Compromiso,
@@ -45,6 +45,9 @@ no previsto en PAC = ámbar, antigüedad máxima 7 días, UIT S/ 5 500 (tope S/ 
 | CP-U35 | `tokens.leer_acceso` | RF-10 | Token a los 14 y a los 15 minutos | Vigente; vencido (reloj inyectado) |
 | CP-U36 | `tokens.leer_acceso` | RNF-03, OWASP A07 | Token alterado, firmado con otra clave, basura | Rechazados |
 | CP-U37 | `tokens.nuevo_token_renovacion` | RNF-03 | Token nuevo | Solo se guarda su SHA-256 |
+| CP-U38 | `Situacion.horas_en_etapa` / `excedido` | RF-07, P08 | Registrado sin enviar; enviado hace 25 h y hace 2 h | Sin plazo; excedido; dentro del plazo |
+| CP-U39 | `Situacion.excedido` | RF-07 | Aprobado con 30 h; Documentación validada con 30 h; Observado | Excedido; dentro de 120 h; sin plazo |
+| CP-U40 | Acciones de `Situacion` | RF-04, RI-25 | Rojo sin ajuste; Rojo con Ninguna; Ámbar denegado; Observado; Verde enviado | Ajustar; anular; anular; subsanar; en bandeja |
 
 ## Pruebas de integración (componentes unidos, con PostgreSQL)
 
@@ -101,3 +104,23 @@ adelanta para verificar vencimientos y el fin del bloqueo.
 | CP-I34 | API → usuarios → BD | CU-15 | Restablecer a un usuario bloqueado | Desbloqueado; la contraseña anterior deja de servir; nueva temporal |
 | CP-I35 | API → usuarios → BD | RI-06, Ley 29733 | Baja; segunda baja; baja, modificación y restablecimiento de la propia cuenta | Seudónimo y sesiones cerradas; 409; 409 (separación de funciones, P5) |
 | CP-I36 | API → inicio → BD | P02 | Inicio del Área Usuaria y de la Gerencia de Administración | Tarjetas y pendientes («Completar paso 2»); GA sin tarjetas |
+
+## Incremento 3, parte A: trámite del Área Usuaria, la Gerencia y las alertas (P04, P05, P07, P08, P11, P17)
+
+Datos: la meta 0012 tiene saldo (verde), la 0015 tiene S/ 2,400.00 disponibles (un
+requerimiento de S/ 3,500.00 resulta en rojo) y la 0033 no tiene saldo (ámbar SIN_DATOS_META).
+
+| ID | Integración que verifica | RF / regla | Entrada | Resultado esperado |
+|---|---|---|---|---|
+| CP-I37 | API → máquina de estados → BD | CU-11, RF-13 | Gerencia aprueba un verde enviado | Aprobado; sale de la bandeja; responsable Logística; bitácora CAMBIO_ETAPA |
+| CP-I38 | Máquina de estados | RF-05, RNF-03 | Aprobar sin envío; AU y JL aprueban; transición inexistente; aprobar un rojo | 409; 403 con ACCESO_DENEGADO; 409; 409 |
+| CP-I39 | API → máquina de estados → BD | CU-11 flujo 2a | Observar sin texto; con texto; subsanar | 422; Observado con la observación visible al área; vuelve a la bandeja |
+| CP-I40 | API → ajuste → semáforo → BD | CU-05, RF-04 | Reformular: reducir un ítem y quitar otro | Monto recalculado, nueva validación verde, ajuste y bitácora con ítems anteriores; segundo ajuste 409 |
+| CP-I41 | Servicio de ajuste | RI-26 | Bajar el precio de un ítem conservado; subir cantidad; sin cambios; ítem nuevo incompleto; reemplazo | 422 en los cuatro primeros; el reemplazo procede |
+| CP-I42 | API → ajuste → máquina de estados | CU-05 flujo 3a, RI-25 | Fecha anterior; anular con opciones; reprogramar; Ninguna; anular | 422; 409; revalida en rojo; solo queda anular; Anulado sin pendientes |
+| CP-I43 | API → decisión → BD | CU-06, RF-09, RI-20 | Ámbar en el panel; AU decide; JP confirma; segunda decisión | En la pestaña Ámbar y en la P02 de JP; 403; vigente verde y llega a la bandeja; 409 |
+| CP-I44 | API → decisión → máquina de estados | CU-06, RI-25 | Denegar sin sustento; con sustento; anular | 422; Ámbar denegado; Anulado |
+| CP-I45 | API → listas | CU-04, RF-03 | P17 con filtro Rojo, buscador, otra unidad, filtro inválido, rol GA | Acción «Aplicar ajuste»; un resultado; no lo ve; 422; 403 |
+| CP-I46 | API → historial | CU-10, RF-05 a RF-07 | Historial tras la aprobación, por GA, JP y otra unidad | Línea de tiempo con roles, duración y etapas futuras; 404 para otra unidad |
+| CP-I47 | Seguridad | Matriz de permisos (P5) | Detalle por GA, JL, JP y ADM; ajuste por GA | 200 sin acciones del área; 403; 403 |
+| CP-I48 | API → inicio | P02 | Inicio de la Gerencia con un requerimiento enviado | Pendiente «Aprobar u observar» que abre la P08 |

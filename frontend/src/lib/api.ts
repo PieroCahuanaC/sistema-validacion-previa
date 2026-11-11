@@ -44,6 +44,50 @@ export type Detalle = {
   lugar_entrega: string | null;
   fecha_envio: string | null;
   puede_completar_paso_2: boolean;
+  // Incremento 3: ajuste aplicado, observación recibida, decisión de Presupuesto y acciones.
+  opcion_ajuste: string | null;
+  observacion_recibida: { texto: string; rol: string; fecha_hora: string } | null;
+  decision_presupuesto: { resultado: "CONFIRMADA" | "DENEGADA"; sustento: string | null; fecha_hora: string; rol: string } | null;
+  acciones: { aplicar_ajuste: boolean; anular: boolean; subsanar: boolean };
+};
+export type Destino = "REGISTRADO" | "APROBADO" | "DOCUMENTACION_VALIDADA" | "CUADRO_REGISTRADO"
+  | "CERTIFICADO" | "ORDEN_EMITIDA" | "OBSERVADO" | "ANULADO";
+export type CambioEtapa = { requerimiento_id: number; codigo: string; estado_anterior: string; estado_actual: string; fecha_hora: string };
+export type ItemAjuste = {
+  id_item_original?: number | null; cantidad: string; descripcion?: string; unidad_medida?: string;
+  precio_unitario_ref?: string; fuente_precio?: "COTIZACION" | "COMPRA_ANTERIOR";
+};
+export type AjusteEntrada = { opcion: "REFORMULAR" | "REPROGRAMAR" | "NINGUNA"; items?: ItemAjuste[]; fecha_necesidad_nueva?: string };
+export type ResultadoAjuste = {
+  requerimiento_id: number; codigo: string; opcion: string; monto_estimado: string; fecha_necesidad: string;
+  revalidado: boolean; estado_semaforo: string | null; motivo: string | null; semaforo_vigente: string;
+};
+export type MiRequerimiento = {
+  requerimiento_id: number; codigo: string; descripcion: string; meta_codigo: string; monto_estimado: string;
+  semaforo: string; semaforo_vigente: string; estado_codigo: string; estado_actual: string;
+  fecha_necesidad: string; fecha_registro: string; accion: string | null; destino: string;
+};
+export type FilaBandeja = {
+  requerimiento_id: number; codigo: string; descripcion: string; unidad_sigla: string; unidad_nombre: string;
+  meta_codigo: string; meta_nombre: string; objeto_contratacion: string; monto_estimado: string;
+  fecha_necesidad: string; semaforo: string; confirmado_por_presupuesto: boolean; motivo: string;
+  fecha_validacion: string; fecha_envio: string; horas_en_bandeja: number; plazo_horas: number | null; excedido: boolean;
+};
+export type Alerta = {
+  requerimiento_id: number; codigo: string; descripcion: string; unidad_sigla: string; meta_codigo: string;
+  monto_evaluado: string; motivo: string; fecha_corte: string | null; fecha_validacion: string;
+  dias_en_alerta: number; estado_actual: string; opcion_ajuste: string | null;
+};
+export type Historial = {
+  requerimiento_id: number; codigo: string; descripcion: string; meta_codigo: string; monto_estimado: string;
+  semaforo: string; semaforo_vigente: string; estado_actual: string; cerrado: boolean;
+  responsable_actual: string; accion_pendiente: string;
+  registros: {
+    estado_codigo: string; estado: string; fecha_hora: string; rol: string; observacion: string | null;
+    horas_en_etapa: number | null; plazo_horas: number | null; excedio_plazo: boolean; en_curso: boolean;
+  }[];
+  etapas_futuras: { estado_codigo: string; estado: string }[];
+  horas_hasta_certificacion: number | null; horas_totales: number | null;
 };
 export type Paso2Entrada = {
   items: { id_item: number; especificacion: string | null }[];
@@ -180,4 +224,18 @@ export const api = {
     pedir<Detalle>(`/requerimientos/${id}/paso-2`, { method: "PUT", body: JSON.stringify(datos) }),
   enviar: (id: number, datos: Paso2Entrada & { documentos: Documentos }) =>
     pedir<ResultadoEnvio>(`/requerimientos/${id}/envio`, { method: "POST", body: JSON.stringify(datos) }),
+  // Incremento 3: trámite del expediente.
+  misRequerimientos: (filtros: Record<string, string>) => {
+    const q = new URLSearchParams(Object.entries(filtros).filter(([, v]) => v));
+    return pedir<MiRequerimiento[]>(`/requerimientos${q.size ? `?${q}` : ""}`);
+  },
+  cambiarEtapa: (id: number, destino: Destino, observacion?: string) =>
+    pedir<CambioEtapa>(`/requerimientos/${id}/etapa`, json("PATCH", { destino, observacion: observacion || null })),
+  aplicarAjuste: (id: number, datos: AjusteEntrada) =>
+    pedir<ResultadoAjuste>(`/requerimientos/${id}/ajustes`, json("POST", datos)),
+  historial: (id: number) => pedir<Historial>(`/requerimientos/${id}/historial`),
+  bandeja: () => pedir<FilaBandeja[]>("/bandeja"),
+  alertas: () => pedir<{ ambar: Alerta[]; rojo: Alerta[] }>("/alertas"),
+  decidir: (id: number, resultado: "CONFIRMADA" | "DENEGADA", sustento: string) =>
+    pedir<{ semaforo_vigente: string }>(`/alertas/${id}/decision`, json("POST", { resultado, sustento: sustento || null })),
 };

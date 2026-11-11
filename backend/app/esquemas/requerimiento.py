@@ -133,6 +133,27 @@ class SemaforoSalida(BaseModel):
     opciones_ajuste: list[str]
 
 
+class ObservacionRecibida(BaseModel):
+    texto: str
+    rol: str
+    fecha_hora: datetime
+
+
+class DecisionRegistrada(BaseModel):
+    resultado: str
+    sustento: str | None
+    fecha_hora: datetime
+    rol: str
+
+
+class AccionesDisponibles(BaseModel):
+    """Acciones del Área Usuaria sobre el requerimiento en su estado actual (P04)."""
+
+    aplicar_ajuste: bool
+    anular: bool
+    subsanar: bool
+
+
 class RequerimientoDetalle(BaseModel):
     requerimiento_id: int
     codigo: str
@@ -158,6 +179,11 @@ class RequerimientoDetalle(BaseModel):
     lugar_entrega: str | None
     fecha_envio: datetime | None
     puede_completar_paso_2: bool
+    # Incremento 3: ajuste, observación recibida, decisión de Presupuesto y acciones (P04).
+    opcion_ajuste: str | None
+    observacion_recibida: ObservacionRecibida | None
+    decision_presupuesto: DecisionRegistrada | None
+    acciones: AccionesDisponibles
 
 
 class MetaSalida(BaseModel):

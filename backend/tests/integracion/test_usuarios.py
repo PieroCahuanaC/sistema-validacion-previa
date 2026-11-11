@@ -112,5 +112,6 @@ def test_cpi36_inicio_muestra_tarjetas_y_pendientes_solo_al_area_usuaria(como, c
     assert any(p["accion"] == "Completar paso 2" for p in inicio["pendientes"])
 
     ga = como("GA").get(INICIO).json()
-    assert ga["pendientes_disponibles"] is False and ga["tarjetas"] is None
-    assert ga["pendientes"] == []
+    assert ga["pendientes_disponibles"] is True and ga["tarjetas"] is None
+    jl = como("JL").get(INICIO).json()  # su lista llega con sus pantallas (parte 3B)
+    assert jl["pendientes_disponibles"] is False and jl["pendientes"] == []
