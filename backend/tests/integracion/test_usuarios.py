@@ -113,5 +113,6 @@ def test_cpi36_inicio_muestra_tarjetas_y_pendientes_solo_al_area_usuaria(como, c
 
     ga = como("GA").get(INICIO).json()
     assert ga["pendientes_disponibles"] is True and ga["tarjetas"] is None
-    jl = como("JL").get(INICIO).json()  # su lista llega con sus pantallas (parte 3B)
-    assert jl["pendientes_disponibles"] is False and jl["pendientes"] == []
+    jl = como("JL").get(INICIO).json()  # sus pendientes salen de P09, P10 y P13 (parte 3B)
+    assert jl["pendientes_disponibles"] is True and jl["tarjetas"] is None
+    assert como("ADM").get(INICIO).json()["pendientes_disponibles"] is False

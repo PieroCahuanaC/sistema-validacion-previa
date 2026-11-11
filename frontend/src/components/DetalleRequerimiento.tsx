@@ -32,9 +32,11 @@ function Etapas({ etapas, responsable, accion }: { etapas: Etapa[]; responsable:
             <button type="button" disabled={!e.cumplida} onClick={() => setAbierta(abierta === e.codigo ? null : e.codigo)}
               aria-current={e.actual ? "step" : undefined} aria-expanded={abierta === e.codigo}
               className={`w-full rounded border p-2 text-left text-sm ${e.actual ? "border-accion bg-accion text-white"
+                : e.observada ? "cursor-default border-2 border-ambar bg-ambar-suave text-tinta"
                 : e.cumplida ? "border-accion text-accion hover:bg-fondo" : "cursor-default border-linea text-pizarra/60"}`}>
               <span className="block font-semibold">{n + 1}. {e.nombre}</span>
               <span className="block text-xs">{e.rol_a_cargo}</span>
+              {e.observada && <span className="mt-1 block text-xs font-semibold text-ambar">⚠ Observó y devolvió</span>}
             </button>
           </li>
         ))}

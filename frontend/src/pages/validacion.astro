@@ -1,0 +1,7 @@
+---
+import Plantilla from "../layouts/Plantilla.astro";
+import ValidacionDocumental from "../components/ValidacionDocumental";
+---
+<Plantilla titulo="Validación documental" ruta={["Inicio", "Validación documental"]} activo="validacion">
+  <ValidacionDocumental client:only="react" />
+</Plantilla>

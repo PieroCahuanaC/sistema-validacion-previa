@@ -111,6 +111,8 @@ class EtapaSalida(BaseModel):
     fecha_hora: datetime | None = None
     rol_registro: str | None = None
     observacion: str | None = None
+    # La etapa que devolvió el requerimiento (estado Observado) o la que impide avanzar.
+    observada: bool = False
 
 
 class BaseCalculo(BaseModel):

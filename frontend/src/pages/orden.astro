@@ -1,0 +1,7 @@
+---
+import Plantilla from "../layouts/Plantilla.astro";
+import RegistrarOrden from "../components/RegistrarOrden";
+---
+<Plantilla titulo="Registrar orden y compromiso SIAF" ruta={["Inicio", "Registrar orden y compromiso SIAF"]} activo="orden">
+  <RegistrarOrden client:only="react" />
+</Plantilla>

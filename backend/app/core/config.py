@@ -23,6 +23,9 @@ class Configuracion(BaseSettings):
     # Clave para firmar los tokens de acceso (JWT). Es un secreto: se define por ambiente
     # (variable CLAVE_JWT en Render) y nunca se escribe en el código.
     clave_jwt: str = ""
+    # Clave maestra para cifrar los datos personales de proveedores persona natural
+    # (AES-256-GCM) y para el resumen HMAC del RUC: 64 caracteres hexadecimales.
+    clave_cifrado: str = ""
 
     @property
     def documentacion_habilitada(self) -> bool:
@@ -69,3 +72,24 @@ def clave_firma() -> str:
     if config.ambiente != "desarrollo":
         raise RuntimeError("Defina la variable CLAVE_JWT para firmar las sesiones.")
     return secrets.token_hex(32)
+
+
+@lru_cache
+def clave_maestra_cifrado() -> bytes:
+    """Clave de cifrado de datos personales. Falla cerrada fuera de desarrollo.
+
+    En desarrollo, si no se define, se genera una al iniciar: los datos cifrados con ella no
+    podrán leerse después de reiniciar la API (se muestran como «no disponible»).
+    """
+    config = obtener_configuracion()
+    if config.clave_cifrado:
+        try:
+            clave = bytes.fromhex(config.clave_cifrado)
+        except ValueError as error:
+            raise RuntimeError("CLAVE_CIFRADO debe ser hexadecimal.") from error
+        if len(clave) != 32:
+            raise RuntimeError("CLAVE_CIFRADO debe tener 64 caracteres hexadecimales.")
+        return clave
+    if config.ambiente != "desarrollo":
+        raise RuntimeError("Defina la variable CLAVE_CIFRADO para proteger los datos personales.")
+    return secrets.token_bytes(32)

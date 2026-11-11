@@ -1,0 +1,7 @@
+---
+import Plantilla from "../layouts/Plantilla.astro";
+import RegistrarCertificacion from "../components/RegistrarCertificacion";
+---
+<Plantilla titulo="Registrar certificación emitida" ruta={["Inicio", "Registrar certificación emitida"]} activo="certificacion">
+  <RegistrarCertificacion client:only="react" />
+</Plantilla>

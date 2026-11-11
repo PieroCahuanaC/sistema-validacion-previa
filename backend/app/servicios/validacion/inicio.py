@@ -3,9 +3,10 @@
 La lista de pendientes se deriva del estado actual de cada requerimiento; no se guardan
 notificaciones (cambio 6 de la Tabla 26 de la Práctica 7). Cada rol funcional ve su propia
 lista con el mismo patrón (H4): el Área Usuaria, lo que debe ajustar, subsanar, completar o
-anular; la Gerencia de Administración, su bandeja de aprobación (P08); y el Jefe de
-Presupuesto, los ámbar sin decisión (P11). La lista del Jefe de Logística llega con sus
-pantallas (P09, P10 y P13).
+anular; la Gerencia de Administración, su bandeja de aprobación (P08); el Jefe de Logística,
+los expedientes por validar (P09), por cuadro o devueltos por Presupuesto (P10) y los
+certificados (P13); y el Jefe de Presupuesto, los ámbar sin decisión (P11) y los cuadros por
+certificar (P12).
 """
 
 from datetime import datetime
@@ -16,6 +17,7 @@ from app.core.reloj import fecha_local
 from app.esquemas.inicio import InicioSalida, PendienteSalida, TarjetasSalida
 from app.repositorios.presupuesto import RepositorioPresupuesto
 from app.seguridad.dependencias import UsuarioActual
+from app.servicios.logistica.expedientes import accion_pendiente
 from app.servicios.validacion.listas import accion_area_usuaria
 from app.servicios.validacion.situacion import Situacion, situaciones_abiertas
 from app.servicios.validacion.vigencia import SemaforoVigente
@@ -44,12 +46,19 @@ def construir_inicio(sesion: Session, usuario: UsuarioActual, ahora: datetime) -
                   f"/bandeja?id={s.requerimiento.id_requerimiento}", s.inicio_del_plazo())
             for s in situaciones_abiertas(sesion) if s.en_bandeja_de_gerencia]
         salida.pendientes_disponibles = True
-    elif usuario.codigo_rol == "JP":
-        salida.pendientes = [
-            _fila(s, "Ámbar", MOTIVOS_AMBAR.get(s.validacion.motivo, s.validacion.motivo),
-                  "Confirmar o denegar", f"/alertas?id={s.requerimiento.id_requerimiento}",
-                  s.validacion.fecha_hora)
-            for s in situaciones_abiertas(sesion) if s.ambar_sin_decision]
+    elif usuario.codigo_rol in ("JL", "JP"):
+        for s in situaciones_abiertas(sesion):
+            if usuario.codigo_rol == "JP" and s.ambar_sin_decision:
+                salida.pendientes.append(_fila(
+                    s, "Ámbar", MOTIVOS_AMBAR.get(s.validacion.motivo, s.validacion.motivo),
+                    "Confirmar o denegar", f"/alertas?id={s.requerimiento.id_requerimiento}",
+                    s.validacion.fecha_hora))
+                continue
+            pendiente = accion_pendiente(sesion, s, usuario.codigo_rol)
+            if pendiente:
+                accion, destino = pendiente
+                salida.pendientes.append(_fila(s, s.semaforo_visible, s.estado.nombre, accion,
+                                               destino, s.desde))
         salida.pendientes_disponibles = True
     salida.pendientes.sort(key=lambda p: p.desde)  # el más antiguo primero
     return salida

@@ -37,6 +37,7 @@ export const MOTIVO_CORTO: Record<string, string> = {
 
 export function horasTexto(horas: number | null | undefined): string {
   if (horas === null || horas === undefined) return "—";
+  if (horas > 0 && horas < 1) return "menos de 1 h";
   const dias = Math.floor(horas / 24);
   const resto = Math.floor(horas % 24);
   return dias ? `${dias} d ${resto} h` : `${resto} h`;

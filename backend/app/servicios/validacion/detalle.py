@@ -94,6 +94,22 @@ def _responsable(
     return "—", "—"
 
 
+def _etapa_que_devolvio(registros: list, estados: dict[int, Estado]) -> str | None:
+    """Etapa que observó el requerimiento: la siguiente a la que estaba al ser devuelto.
+
+    Devuelto desde Registrado, observó la Gerencia (etapa Aprobado); desde Aprobado, observó
+    Logística en la validación documental (etapa Documentación validada). Así el indicador
+    marca dónde se detuvo el trámite (Figura 5 de la Práctica 7).
+    """
+    if len(registros) < 2 or estados[registros[-1].id_estado].codigo != "OBSERVADO":
+        return None
+    origen = estados[registros[-2].id_estado].codigo
+    if origen not in ESTADOS_DEL_RECORRIDO:
+        return None
+    indice = ESTADOS_DEL_RECORRIDO.index(origen)
+    return ESTADOS_DEL_RECORRIDO[indice + 1] if indice + 1 < len(ESTADOS_DEL_RECORRIDO) else None
+
+
 def construir_detalle(sesion: Session, requerimiento: Requerimiento,
                       usuario: UsuarioActual | None = None) -> RequerimientoDetalle:
     catalogos = RepositorioCatalogos(sesion)
@@ -119,6 +135,7 @@ def construir_detalle(sesion: Session, requerimiento: Requerimiento,
 
     registros = requerimientos.historial(requerimiento.id_requerimiento)
     historial = {h.id_estado: h for h in registros}
+    etapa_observada = _etapa_que_devolvio(registros, estados)
     etapas = []
     for codigo in ESTADOS_DEL_RECORRIDO:
         estado = next(e for e in estados.values() if e.codigo == codigo)
@@ -130,6 +147,7 @@ def construir_detalle(sesion: Session, requerimiento: Requerimiento,
             fecha_hora=registro.fecha_hora if registro else None,
             rol_registro=roles[registro.id_rol].nombre if registro else None,
             observacion=registro.observacion if registro else None,
+            observada=estado.codigo == etapa_observada,
         ))
 
     observacion_recibida = None
