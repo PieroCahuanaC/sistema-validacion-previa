@@ -1,0 +1,29 @@
+---
+// P01. Iniciar sesión: pantalla pública, sin menú ni barra de usuario.
+import "../styles/global.css";
+import Ingreso from "../components/Ingreso";
+---
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <title>Iniciar sesión · Sistema presupuestal de validación previa</title>
+  </head>
+  <body class="min-h-screen">
+    <header class="flex h-14 items-center border-b border-linea bg-tinta px-4 text-white">
+      <span class="font-semibold">Sistema presupuestal de validación previa</span>
+    </header>
+    <main class="mx-auto flex max-w-md flex-col px-4 py-10">
+      <p class="mb-1 text-sm text-pizarra">Municipalidad Distrital de Uchumayo</p>
+      <p class="mb-6 text-sm text-pizarra">Validación presupuestal de contrataciones iguales o inferiores a 8 UIT</p>
+      <div class="rounded border border-linea bg-superficie p-6 shadow-sm">
+        <Ingreso client:only="react" />
+      </div>
+    </main>
+  </body>
+</html>

@@ -39,8 +39,13 @@ pip install -r requirements-dev.txt
 copy .env.example .env                                   # Windows (en Linux/macOS: cp)
 alembic upgrade head                                     # crea las 23 tablas
 python -m semillas.cargar                                # catálogos, regla y datos mock
+python -m semillas.usuarios                              # un usuario por rol (contraseñas temporales)
 uvicorn app.main:app --reload                            # http://localhost:8000/docs
 ```
+
+`semillas.usuarios` imprime una sola vez la contraseña temporal de cada usuario de prueba
+(`admin`, `au.gdur`, `au.gsp`, `gerencia`, `logistica`, `presupuesto`); en el primer ingreso el
+sistema obliga a cambiarla. El repositorio es público y no contiene ninguna contraseña.
 
 Pruebas (las de integración necesitan una base vacía propia):
 
