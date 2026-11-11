@@ -24,6 +24,7 @@ from app.seguridad.dependencias import UsuarioActual
 from app.servicios.seguridad import bitacora
 from app.servicios.seguridad.bitacora import Contexto
 from app.servicios.validacion.situacion import Situacion, situacion
+from app.servicios.validacion.vigencia import SemaforoVigente
 
 Guarda = Callable[[Situacion], str | None]
 
@@ -52,6 +53,16 @@ def _sin_condicion(_: Situacion) -> str | None:
     return None
 
 
+def _certificar(s: Situacion) -> str | None:
+    if s.vigente == SemaforoVigente.AMBAR_PENDIENTE:
+        return ("El semáforo está en ámbar: confirme primero la disponibilidad en el Panel de "
+                "alertas (P11).")
+    if s.vigente != SemaforoVigente.VERDE:
+        return ("No hay disponibilidad presupuestal confirmada: devuelva el expediente o "
+                "anúlelo por falta de disponibilidad.")
+    return None
+
+
 # Transiciones que se registran con PATCH /requerimientos/{id}/etapa y su guarda de negocio.
 # Las que exigen datos propios (revisión documental, cuadro comparativo, certificación y
 # orden) se registran desde sus pantallas y se agregan aquí cuando existen.
@@ -60,7 +71,16 @@ GUARDAS: dict[tuple[str, str], Guarda] = {
     ("REGISTRADO", "OBSERVADO"): _observar_en_gerencia,
     ("OBSERVADO", "REGISTRADO"): _sin_condicion,
     ("REGISTRADO", "ANULADO"): _anular,
+    # Incremento 3B: certificación (P12) y orden (P13).
+    ("CUADRO_REGISTRADO", "CERTIFICADO"): _certificar,
+    ("CUADRO_REGISTRADO", "DOCUMENTACION_VALIDADA"): _sin_condicion,
+    ("CUADRO_REGISTRADO", "ANULADO"): _sin_condicion,
+    ("CERTIFICADO", "ORDEN_EMITIDA"): _sin_condicion,
 }
+
+# Además de las devoluciones, exigen observación: la anulación por falta de disponibilidad
+# que registra Presupuesto (cambio 16 de la Práctica 7) debe dejar su motivo.
+OBSERVACION_OBLIGATORIA = {("CUADRO_REGISTRADO", "ANULADO")}
 
 
 class MaquinaEstados:
@@ -68,6 +88,15 @@ class MaquinaEstados:
         self._sesion = sesion
         self._reloj = reloj
         self._contexto = contexto
+
+    def obtener(self, id_requerimiento: int, usuario: UsuarioActual) -> Requerimiento:
+        """Obtiene el requerimiento para consulta, con la misma regla de pertenencia."""
+        requerimiento = self._sesion.get(Requerimiento, id_requerimiento)
+        if requerimiento is None or (
+            usuario.codigo_rol == "AU" and requerimiento.id_unidad != usuario.id_unidad
+        ):
+            raise NoEncontrado("El requerimiento no existe.")
+        return requerimiento
 
     def bloquear(self, id_requerimiento: int, usuario: UsuarioActual) -> Requerimiento:
         """Obtiene el requerimiento con bloqueo de fila, para que dos usuarios no registren a
@@ -95,6 +124,8 @@ class MaquinaEstados:
         motivo = guarda(actual)
         if motivo:
             raise ErrorNegocio(409, "Conflicto", motivo)
+        if (origen, destino) in OBSERVACION_OBLIGATORIA and not (observacion or "").strip():
+            raise DatosNoValidos("Indique el motivo: la observación es obligatoria.")
         registro = self.registrar(requerimiento, transicion, destino, observacion, usuario)
         self._sesion.commit()
         return requerimiento, origen, registro

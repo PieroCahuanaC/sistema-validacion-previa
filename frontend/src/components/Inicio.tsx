@@ -84,7 +84,7 @@ export default function Inicio() {
                     <th scope="col" className="px-3 py-2">Código</th>
                     <th scope="col" className="px-3 py-2">Descripción</th>
                     <th scope="col" className="px-3 py-2">Situación</th>
-                    <th scope="col" className="px-3 py-2">Motivo</th>
+                    <th scope="col" className="hidden px-3 py-2 xl:table-cell">Motivo</th>
                     <th scope="col" className="px-3 py-2">Desde</th>
                     <th scope="col" className="px-3 py-2"><span className="sr-only">Acción</span></th>
                   </tr>
@@ -93,14 +93,14 @@ export default function Inicio() {
                   {datos.pendientes.map((p) => (
                     <tr key={p.requerimiento_id} className="border-t border-linea">
                       <td className="px-3 py-2 font-semibold whitespace-nowrap">{p.codigo}</td>
-                      <td className="max-w-xs px-3 py-2">{p.descripcion}</td>
+                      <td className="min-w-40 px-3 py-2">{p.descripcion}<span className="block text-xs text-pizarra xl:hidden">{p.motivo}</span></td>
                       <td className="px-3 py-2">
                         <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${SITUACION[p.situacion] ?? ""}`}>{p.situacion}</span>
                       </td>
-                      <td className="px-3 py-2">{p.motivo}</td>
+                      <td className="hidden px-3 py-2 xl:table-cell">{p.motivo}</td>
                       <td className="px-3 py-2 whitespace-nowrap">{formatoFechaHora(p.desde)}</td>
                       <td className="px-3 py-2 text-right">
-                        <a href={p.destino} className="inline-block rounded bg-accion px-3 py-1.5 font-semibold whitespace-nowrap text-white hover:bg-accion-hover">{p.accion}</a>
+                        <a href={p.destino} className="inline-block rounded bg-accion px-3 py-1.5 text-center font-semibold text-white hover:bg-accion-hover">{p.accion}</a>
                       </td>
                     </tr>
                   ))}

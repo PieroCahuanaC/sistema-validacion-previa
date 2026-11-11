@@ -1,4 +1,4 @@
-# Casos de prueba — Incrementos 1 a 3 (validación presupuestal; seguridad y acceso; trámite)
+# Casos de prueba — Incrementos 1 a 3 (validación presupuestal; seguridad y acceso; trámite completo)
 
 Datos de prueba: mock (semillas). Meta 0012: PIM 180 000, certificación 152 000, compromiso anual
 148 500, saldo presupuestal disponible 31 500. Regla inicial: umbral 100 %, columna Compromiso,
@@ -48,6 +48,10 @@ no previsto en PAC = ámbar, antigüedad máxima 7 días, UIT S/ 5 500 (tope S/ 
 | CP-U38 | `Situacion.horas_en_etapa` / `excedido` | RF-07, P08 | Registrado sin enviar; enviado hace 25 h y hace 2 h | Sin plazo; excedido; dentro del plazo |
 | CP-U39 | `Situacion.excedido` | RF-07 | Aprobado con 30 h; Documentación validada con 30 h; Observado | Excedido; dentro de 120 h; sin plazo |
 | CP-U40 | Acciones de `Situacion` | RF-04, RI-25 | Rojo sin ajuste; Rojo con Ninguna; Ámbar denegado; Observado; Verde enviado | Ajustar; anular; anular; subsanar; en bandeja |
+| CP-U41 | `cifrado.cifrar` / `descifrar` | Ley 29733 | Nombre de persona natural cifrado dos veces; texto de 300 caracteres | Valores distintos (nonce), sin texto plano, descifra igual; cabe en 500 |
+| CP-U42 | `cifrado.descifrar` | RNF-03 | Valor cifrado alterado; texto no cifrado | «no disponible» (etiqueta GCM); se devuelve igual |
+| CP-U43 | `cifrado.resumen_ruc` | RNF-03 | RUC | HMAC de 64 caracteres, determinista y distinto de un SHA-256 sin clave |
+| CP-U44 | `cifrado.ruc_valido` | P10 | RUC válidos, con dígito errado, cortos o con letras | Solo los válidos pasan (módulo 11) |
 
 ## Pruebas de integración (componentes unidos, con PostgreSQL)
 
@@ -124,3 +128,17 @@ requerimiento de S/ 3,500.00 resulta en rojo) y la 0033 no tiene saldo (ámbar S
 | CP-I46 | API → historial | CU-10, RF-05 a RF-07 | Historial tras la aprobación, por GA, JP y otra unidad | Línea de tiempo con roles, duración y etapas futuras; 404 para otra unidad |
 | CP-I47 | Seguridad | Matriz de permisos (P5) | Detalle por GA, JL, JP y ADM; ajuste por GA | 200 sin acciones del área; 403; 403 |
 | CP-I48 | API → inicio | P02 | Inicio de la Gerencia con un requerimiento enviado | Pendiente «Aprobar u observar» que abre la P08 |
+
+## Incremento 3, parte B: Logística y certificación (P09, P10, P12, P13)
+
+| ID | Integración que verifica | RF / regla | Entrada | Resultado esperado |
+|---|---|---|---|---|
+| CP-I49 | API → revisión → máquina de estados → BD | CU-07, RF-11 | Expediente aprobado; tres documentos conformes | En la lista de Logística; Documentación validada; pendiente «Registrar cuadro comparativo»; bitácora REVISION_DOCUMENTO |
+| CP-I50 | API → revisión | CU-07 flujo 2a, RI-11 | Observado sin texto; revisión incompleta; rol GA; observado con texto; segunda revisión | 422; 422; 403; Observado con la observación y la etapa de Logística marcada; 409 |
+| CP-I51 | API → cuadro → proveedores → BD | CU-08, RF-12, Ley 29733 | Cuadro con persona natural y jurídica, precio menor al validado | Pasa a Presupuesto sin revalidar; RUC y nombre de la persona natural cifrados; Logística los ve, Presupuesto no; búsqueda por RUC; bitácora sin datos personales |
+| CP-I52 | Servicio de cuadro | CU-08 flujo 1a | Antes de validar documentos; sin cotizaciones; RUC inválido; persona natural con RUC 20; proveedor repetido; fecha futura; rol JP | 409; 422 en los cinco casos; 403 |
+| CP-I53 | API → cuadro → semáforo | Cambio 8 de la P7 | Precio de mercado mayor al monto, con saldo | Revalida en verde con el precio como monto evaluado; pasa a Presupuesto |
+| CP-I54 | API → cuadro → semáforo → máquina de estados | Cambio 8 de la P7 | Precio de mercado sin saldo | Revalida en rojo; vuelve a Registrado con «Aplicar ajuste» y la observación de Logística |
+| CP-I55 | API → máquina de estados | CU-13, CU-14, RF-05, RF-07 | Pendiente de JP; certificar por JL; certificar por JP; orden por JP; orden por JL; anular cerrado | Lista de 48 h; 403; Certificado; 403; Orden emitida con tiempos y sin etapas futuras; 409 |
+| CP-I56 | API → máquina de estados → cuadro | Cambio 4 de la P7, R26 | Devolución sin texto; con texto; corrección del cuadro | 422; modo corrección con la observación de Presupuesto; el mismo cuadro corregido y la bitácora con el valor anterior |
+| CP-I57 | API → cuadro → decisión → máquina de estados | Cambio 16 de la P7, RI-20 | Ámbar con el precio de mercado; certificar; denegar; anular sin y con motivo | Pasa a Presupuesto en ámbar; 409; pendiente «Anular por falta de disponibilidad»; 422; Anulado |

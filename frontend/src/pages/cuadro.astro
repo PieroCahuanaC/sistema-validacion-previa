@@ -1,0 +1,7 @@
+---
+import Plantilla from "../layouts/Plantilla.astro";
+import CuadroComparativoPantalla from "../components/CuadroComparativoPantalla";
+---
+<Plantilla titulo="Cuadro comparativo" ruta={["Inicio", "Cuadro comparativo"]} activo="cuadro">
+  <CuadroComparativoPantalla client:only="react" />
+</Plantilla>

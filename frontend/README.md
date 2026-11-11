@@ -8,6 +8,8 @@ Astro + React + Tailwind. Pantallas implementadas de la Práctica 7:
 - Incremento 3, parte A: P05 (Aplicar ajuste sugerido), P07 (Historial de trazabilidad), P08
   (Bandeja de aprobación), P11 (Panel de alertas) y P17 (Mis requerimientos); la P04 suma
   Subsanar y reenviar, Anular y Ver historial.
+- Incremento 3, parte B: P09 (Validación documental), P10 (Cuadro comparativo), P12 (Registrar
+  certificación emitida) y P13 (Registrar orden y compromiso SIAF).
 
 ```bash
 npm install

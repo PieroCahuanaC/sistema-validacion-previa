@@ -20,6 +20,7 @@ export type ResultadoRegistro = { requerimiento_id: number; codigo: string; esta
 export type Etapa = {
   codigo: string; nombre: string; rol_a_cargo: string; cumplida: boolean; actual: boolean;
   fecha_hora: string | null; rol_registro: string | null; observacion: string | null;
+  observada: boolean;
 };
 export type Detalle = {
   requerimiento_id: number; codigo: string; unidad_organica: string; meta_codigo: string;
@@ -77,6 +78,31 @@ export type Alerta = {
   requerimiento_id: number; codigo: string; descripcion: string; unidad_sigla: string; meta_codigo: string;
   monto_evaluado: string; motivo: string; fecha_corte: string | null; fecha_validacion: string;
   dias_en_alerta: number; estado_actual: string; opcion_ajuste: string | null;
+};
+export type Expediente = {
+  requerimiento_id: number; codigo: string; descripcion: string; unidad_sigla: string; meta_codigo: string;
+  objeto_contratacion: "BIEN" | "SERVICIO"; monto_estimado: string; precio_referencia: string | null;
+  semaforo_vigente: string; confirmado_por_presupuesto: boolean; estado_codigo: string; estado_actual: string;
+  desde: string; horas_en_etapa: number; plazo_horas: number | null; excedido: boolean; devuelto: boolean; nota: string | null;
+};
+export type DocumentoRevision = {
+  id_tipo_documento: number; nombre: string; obligatorio: boolean;
+  ultimo_resultado: string | null; ultima_observacion: string | null; ultima_fecha: string | null;
+};
+export type Proveedor = { id_proveedor: number; tipo_persona: "NATURAL" | "JURIDICA"; ruc: string; razon_social: string };
+export type CotizacionEntrada = {
+  id_proveedor?: number; proveedor?: { tipo_persona: "NATURAL" | "JURIDICA"; ruc: string; razon_social: string };
+  monto: string; fecha_cotizacion: string;
+};
+export type Cuadro = {
+  requerimiento_id: number; existe: boolean; modo: "REGISTRO" | "CORRECCION" | "CONSULTA"; monto_validado: string;
+  precio_referencia: string | null; observacion: string | null; fecha_registro: string | null;
+  menor_cotizacion: string | null; promedio: string | null; devolucion_presupuesto: string | null;
+  cotizaciones: { id_cotizacion: number; monto: string; fecha_cotizacion: string; proveedor: Proveedor | null }[];
+};
+export type ResultadoCuadro = {
+  requerimiento_id: number; codigo: string; modo: string; revalidado: boolean; estado_semaforo: string | null;
+  semaforo_vigente: string; estado_actual: string; destino: "PRESUPUESTO" | "AREA_USUARIA";
 };
 export type Historial = {
   requerimiento_id: number; codigo: string; descripcion: string; meta_codigo: string; monto_estimado: string;
@@ -236,6 +262,15 @@ export const api = {
   historial: (id: number) => pedir<Historial>(`/requerimientos/${id}/historial`),
   bandeja: () => pedir<FilaBandeja[]>("/bandeja"),
   alertas: () => pedir<{ ambar: Alerta[]; rojo: Alerta[] }>("/alertas"),
+  // Incremento 3B: Logística y certificación.
+  expedientes: (estado: string) => pedir<Expediente[]>(`/expedientes?estado=${estado}`),
+  revision: (id: number) => pedir<{ requerimiento_id: number; puede_revisar: boolean; documentos: DocumentoRevision[] }>(`/requerimientos/${id}/revision`),
+  registrarRevision: (id: number, documentos: { id_tipo_documento: number; resultado: string; observacion?: string }[]) =>
+    pedir<{ resultado: "VALIDADA" | "DEVUELTA"; codigo: string; estado_actual: string }>(`/requerimientos/${id}/revision`, json("POST", { documentos })),
+  buscarProveedor: (ruc: string) => pedir<{ encontrado: boolean; proveedor: Proveedor | null }>(`/proveedores?ruc=${ruc}`),
+  cuadro: (id: number) => pedir<Cuadro>(`/requerimientos/${id}/cuadro`),
+  guardarCuadro: (id: number, datos: { cotizaciones: CotizacionEntrada[]; precio_referencia: string; observacion: string | null }) =>
+    pedir<ResultadoCuadro>(`/requerimientos/${id}/cuadro`, json("PUT", datos)),
   decidir: (id: number, resultado: "CONFIRMADA" | "DENEGADA", sustento: string) =>
     pedir<{ semaforo_vigente: string }>(`/alertas/${id}/decision`, json("POST", { resultado, sustento: sustento || null })),
 };
