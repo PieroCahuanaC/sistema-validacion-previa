@@ -6,6 +6,7 @@ primera validación se confirman juntos o no se guarda nada.
 """
 
 from datetime import datetime
+from decimal import Decimal
 
 from sqlalchemy.orm import Session
 
@@ -30,6 +31,8 @@ from app.repositorios.catalogos import RepositorioCatalogos
 from app.repositorios.presupuesto import RepositorioPresupuesto
 from app.repositorios.requerimientos import RepositorioRequerimientos
 from app.seguridad.dependencias import UsuarioActual
+from app.servicios.seguridad import bitacora
+from app.servicios.seguridad.bitacora import Contexto
 from app.servicios.validacion.monto import calcular_monto_estimado, verificar_tope_8_uit
 from app.servicios.validacion.regla_semaforo import (
     EntradaSemaforo,
@@ -43,9 +46,10 @@ from app.servicios.validacion.vigencia import SemaforoVigente, semaforo_vigente
 
 
 class ServicioValidacion:
-    def __init__(self, sesion: Session, reloj: Reloj) -> None:
+    def __init__(self, sesion: Session, reloj: Reloj, contexto: Contexto | None = None) -> None:
         self._sesion = sesion
         self._reloj = reloj
+        self._contexto = contexto
         self._catalogos = RepositorioCatalogos(sesion)
         self._presupuesto = RepositorioPresupuesto(sesion)
         self._requerimientos = RepositorioRequerimientos(sesion)
@@ -93,6 +97,11 @@ class ServicioValidacion:
                            fecha_hora=momento),
         )
         resultado, saldo, carga = self._validar(requerimiento, meta, id_regla, parametros, momento)
+        self._registrar_en_bitacora(
+            "REGISTRO_REQUERIMIENTO", requerimiento, usuario, momento,
+            {"monto_estimado": str(monto), "items": len(datos.items)})
+        self._registrar_validacion(requerimiento, usuario, momento, resultado,
+                                   requerimiento.monto_estimado)
         self._sesion.commit()
 
         return ResultadoRegistro(
@@ -113,11 +122,48 @@ class ServicioValidacion:
             raise DatosNoValidos(f"El ítem {referencia} no figura en el PAC vigente.")
         return item.id_pac_item
 
+    def revalidar(
+        self, requerimiento: Requerimiento, usuario: UsuarioActual, momento: datetime,
+        monto: Decimal | None = None,
+    ) -> ResultadoSemaforo:
+        """Nueva validación del mismo requerimiento: tras un ajuste (CU-05) o con el precio de
+        mercado del cuadro comparativo (cambio 8 de la Práctica 7). Se agrega una validación
+        nueva; las anteriores se conservan (RI-22) y la vigente es la más reciente (I-05)."""
+        id_regla, parametros = self.regla_vigente()
+        meta = self._sesion.get(MetaPresupuestal, requerimiento.id_meta)
+        resultado, _, _ = self._validar(requerimiento, meta, id_regla, parametros, momento,
+                                        monto)
+        self._registrar_validacion(requerimiento, usuario, momento, resultado,
+                                   monto or requerimiento.monto_estimado)
+        return resultado
+
+    def _registrar_validacion(
+        self, requerimiento: Requerimiento, usuario: UsuarioActual, momento: datetime,
+        resultado: ResultadoSemaforo, monto: Decimal,
+    ) -> None:
+        self._registrar_en_bitacora(
+            "VALIDACION_SEMAFORO", requerimiento, usuario, momento,
+            {"estado": str(resultado.estado), "motivo": str(resultado.motivo),
+             "monto_evaluado": str(monto)})
+
+    def _registrar_en_bitacora(
+        self, accion: str, requerimiento: Requerimiento, usuario: UsuarioActual,
+        momento: datetime, detalle: dict,
+    ) -> None:
+        if self._contexto is None:
+            return
+        bitacora.registrar(
+            self._sesion, momento, self._contexto, accion, "EXITO",
+            id_usuario=usuario.id_usuario, id_rol=usuario.id_rol,
+            recurso_tipo="REQUERIMIENTO", recurso_id=requerimiento.id_requerimiento,
+            detalle=detalle)
+
     def _validar(
         self, requerimiento: Requerimiento, meta: MetaPresupuestal, id_regla: int,
-        parametros: ParametrosRegla, momento: datetime,
+        parametros: ParametrosRegla, momento: datetime, monto: Decimal | None = None,
     ) -> tuple[ResultadoSemaforo, SaldoMeta | None, CargaDatos | None]:
         """CU-01: calcula el semáforo con la última carga del MEF y la regla vigente (RI-17)."""
+        monto = monto if monto is not None else requerimiento.monto_estimado
         carga = self._presupuesto.ultima_carga_exitosa("MEF", meta.anio_fiscal)
         saldo = self._presupuesto.saldo(meta.id_meta, carga.id_carga) if carga else None
         vigente = None
@@ -125,14 +171,14 @@ class ServicioValidacion:
             vigente = SaldoVigente(saldo.pim, saldo.certificacion, saldo.compromiso_anual,
                                    carga.fecha_corte)
         resultado = evaluar_semaforo(EntradaSemaforo(
-            monto=requerimiento.monto_estimado, saldo=vigente,
+            monto=monto, saldo=vigente,
             previsto_en_pac=requerimiento.id_pac_item is not None,
             parametros=parametros, momento=momento,
         ))
         self._requerimientos.agregar(ValidacionPresupuestal(
             id_requerimiento=requerimiento.id_requerimiento,
             id_saldo=saldo.id_saldo if vigente and saldo else None, id_regla=id_regla,
-            fecha_hora=momento, monto_evaluado=requerimiento.monto_estimado,
+            fecha_hora=momento, monto_evaluado=monto,
             estado_semaforo=resultado.estado, motivo=resultado.motivo,
         ))
         return resultado, saldo, carga

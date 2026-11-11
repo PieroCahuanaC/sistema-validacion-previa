@@ -30,12 +30,12 @@ export const MENU_POR_ROL: Record<Rol["codigo"], OpcionMenu[]> = {
   AU: [
     { id: "inicio", texto: "Inicio", href: "/inicio" },
     { id: "registrar", texto: "Registrar requerimiento", href: "/requerimientos/nuevo" },
-    { id: "mis", texto: "Mis requerimientos", href: null },
+    { id: "mis", texto: "Mis requerimientos", href: "/requerimientos" },
     { id: "tablero", texto: "Tablero", href: null },
   ],
   GA: [
     { id: "inicio", texto: "Inicio", href: "/inicio" },
-    { id: "bandeja", texto: "Bandeja de aprobación", href: null },
+    { id: "bandeja", texto: "Bandeja de aprobación", href: "/bandeja" },
     { id: "tablero", texto: "Tablero", href: null },
   ],
   JL: [
@@ -47,7 +47,7 @@ export const MENU_POR_ROL: Record<Rol["codigo"], OpcionMenu[]> = {
   ],
   JP: [
     { id: "inicio", texto: "Inicio", href: "/inicio" },
-    { id: "alertas", texto: "Panel de alertas", href: null },
+    { id: "alertas", texto: "Panel de alertas", href: "/alertas" },
     { id: "certificacion", texto: "Registrar certificación", href: null },
     { id: "reglas", texto: "Configurar reglas del semáforo", href: null },
     { id: "base", texto: "Base presupuestal", href: null },

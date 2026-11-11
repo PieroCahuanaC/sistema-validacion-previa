@@ -1,8 +1,10 @@
 // P04. Detalle del requerimiento y semáforo (CU-04, RF-02, RF-03). Incluye el indicador de
 // etapas del trámite con el responsable actual, que pidió el asesor en la Práctica 7.
 import { useEffect, useState } from "react";
-import { api, ErrorApi, type Detalle, type Etapa } from "../lib/api";
+import { api, ErrorApi, type Detalle, type Etapa, type UsuarioSesion } from "../lib/api";
 import { formatoFecha, formatoFechaHora, formatoSoles } from "../lib/formato";
+import { sesionActual } from "../lib/sesion";
+import { AreaObservacion, Aviso, Confirmacion, principal, secundario } from "./comunes";
 
 const COLOR = {
   VERDE: { texto: "Verde", banda: "bg-verde text-white", suave: "bg-verde-suave border-verde" },
@@ -59,19 +61,47 @@ function Fila({ etiqueta, valor, signo, fuerte }: { etiqueta: string; valor: str
   );
 }
 
+type Accion = "subsanar" | "anular" | null;
+
 export default function DetalleRequerimiento() {
   const [detalle, setDetalle] = useState<Detalle | null>(null);
+  const [usuario, setUsuario] = useState<UsuarioSesion | null>(null);
   const [error, setError] = useState("");
   const [ayuda, setAyuda] = useState(false);
+  const [accion, setAccion] = useState<Accion>(null);
+  const [texto, setTexto] = useState("");
+  const [ocupado, setOcupado] = useState(false);
+  const [aviso, setAviso] = useState<{ tipo: "ok" | "error"; texto: string } | null>(null);
   const parametros = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const registrado = parametros?.get("registrado") === "1";
   const enviado = parametros?.get("enviado") === "1";
+  const ajustado = parametros?.get("ajustado");
+  const id = Number(parametros?.get("id"));
 
+  const cargar = () => api.detalle(id).then(setDetalle).catch((e: ErrorApi) => setError(e.message));
   useEffect(() => {
-    const id = Number(parametros?.get("id"));
     if (!id) { setError("Indique el requerimiento que desea consultar."); return; }
-    api.detalle(id).then(setDetalle).catch((e: ErrorApi) => setError(e.message));
+    sesionActual().then(setUsuario).catch(() => undefined);
+    cargar();
   }, []);
+
+  async function ejecutar() {
+    if (!detalle || !accion) return;
+    setOcupado(true);
+    try {
+      const r = await api.cambiarEtapa(detalle.requerimiento_id, accion === "anular" ? "ANULADO" : "REGISTRADO", texto);
+      setAviso({ tipo: "ok", texto: accion === "anular"
+        ? `Requerimiento ${r.codigo} anulado. El trámite quedó cerrado.`
+        : `Requerimiento ${r.codigo} subsanado y reenviado a la Gerencia de Administración.` });
+      setAccion(null); setTexto("");
+      await cargar();
+    } catch (e) {
+      setAviso({ tipo: "error", texto: (e as ErrorApi).message });
+      setAccion(null);
+    } finally {
+      setOcupado(false);
+    }
+  }
 
   if (error) return <p role="alert" className="rounded border border-rojo bg-rojo-suave p-3">{error}</p>;
   if (!detalle) return <p className="text-pizarra">Cargando el requerimiento…</p>;
@@ -88,6 +118,29 @@ export default function DetalleRequerimiento() {
         <p role="status" className="rounded border border-verde bg-verde-suave p-3 text-sm">
           Requerimiento {detalle.codigo} registrado. El sistema validó su disponibilidad presupuestal.
         </p>
+      )}
+      {aviso && <Aviso tipo={aviso.tipo}>{aviso.texto}</Aviso>}
+      {ajustado && (
+        <Aviso tipo={ajustado === "NINGUNA" ? "info" : "ok"}>
+          {ajustado === "NINGUNA"
+            ? "Se registró que el área no acepta ninguna opción de ajuste. El requerimiento solo puede anularse."
+            : "Ajuste aplicado. El sistema volvió a validar la disponibilidad presupuestal con los datos nuevos."}
+        </Aviso>
+      )}
+      {detalle.observacion_recibida && (
+        <Aviso tipo="atencion">
+          <p className="font-semibold">Observación recibida de {detalle.observacion_recibida.rol} · {formatoFechaHora(detalle.observacion_recibida.fecha_hora)}</p>
+          <p className="mt-1">{detalle.observacion_recibida.texto}</p>
+        </Aviso>
+      )}
+      {detalle.decision_presupuesto && (
+        <Aviso tipo={detalle.decision_presupuesto.resultado === "CONFIRMADA" ? "ok" : "atencion"}>
+          <p className="font-semibold">
+            {detalle.decision_presupuesto.rol} {detalle.decision_presupuesto.resultado === "CONFIRMADA" ? "confirmó" : "denegó"} la
+            disponibilidad el {formatoFechaHora(detalle.decision_presupuesto.fecha_hora)}
+          </p>
+          {detalle.decision_presupuesto.sustento && <p className="mt-1">Sustento: {detalle.decision_presupuesto.sustento}</p>}
+        </Aviso>
       )}
       {enviado && (
         <p role="status" className="rounded border border-verde bg-verde-suave p-3 text-sm">
@@ -133,12 +186,14 @@ export default function DetalleRequerimiento() {
                 Enviado a la Gerencia de Administración el <strong>{formatoFechaHora(detalle.fecha_envio)}</strong>
               </p>
             )}
-            {s.opciones_ajuste.length > 0 && (
+            {detalle.acciones.aplicar_ajuste && (
               <div className="mt-4">
-                <button type="button" disabled title="La pantalla P05 se implementa en el siguiente incremento"
-                  className="cursor-not-allowed rounded bg-accion px-4 py-2 font-semibold text-white opacity-50">Aplicar ajuste</button>
-                <p className="mt-1 text-xs text-pizarra">Podrá reformular o reprogramar el requerimiento (siguiente incremento).</p>
+                <a href={`/requerimientos/ajuste?id=${detalle.requerimiento_id}`} className={`inline-block ${principal}`}>Aplicar ajuste</a>
+                <p className="mt-1 text-xs text-pizarra">Reformule lo que pide o reprograme la fecha de necesidad; el sistema volverá a validar.</p>
               </div>
+            )}
+            {detalle.opcion_ajuste === "NINGUNA" && (
+              <p className="mt-4 text-sm">El área no aceptó ninguna opción de ajuste: el requerimiento solo puede anularse.</p>
             )}
           </div>
           <dl aria-label="Base de cálculo" className="rounded bg-superficie p-3 text-sm">
@@ -182,11 +237,37 @@ export default function DetalleRequerimiento() {
         </table>
       </section>
 
-      <div className="flex justify-end gap-3">
-        <button type="button" disabled title="La pantalla P07 se implementa en el siguiente incremento"
-          className="cursor-not-allowed rounded border border-linea px-4 py-2 opacity-50">Ver historial</button>
-        <a href="/requerimientos/nuevo" className="rounded border border-linea px-4 py-2 hover:bg-superficie">Registrar otro requerimiento</a>
+      <div className="flex flex-wrap justify-end gap-3">
+        <button type="button" onClick={() => history.back()} className={secundario}>Volver</button>
+        <a href={`/requerimientos/historial?id=${detalle.requerimiento_id}`} className={secundario}>Ver historial</a>
+        {detalle.acciones.anular && (
+          <button type="button" onClick={() => setAccion("anular")} className={`${secundario} text-rojo`}>Anular requerimiento</button>
+        )}
+        {detalle.acciones.subsanar && (
+          <button type="button" onClick={() => setAccion("subsanar")} className={principal}>Subsanar y reenviar</button>
+        )}
+        {usuario?.rol.codigo === "AU" && !detalle.acciones.subsanar && (
+          <a href="/requerimientos/nuevo" className={secundario}>Registrar otro requerimiento</a>
+        )}
       </div>
+
+      {accion === "anular" && (
+        <Confirmacion titulo="¿Anular el requerimiento?" textoAccion="Anular" tipo="peligro" ocupado={ocupado}
+          onConfirmar={ejecutar} onCancelar={() => setAccion(null)}>
+          <p>Se anulará <strong>{detalle.codigo}</strong>. El trámite se cierra de forma definitiva y se detiene el cómputo del tiempo.</p>
+          <p className="font-semibold">Esta acción no se puede deshacer.</p>
+          <AreaObservacion id="motivo-anulacion" texto="Motivo (opcional)" valor={texto} onChange={setTexto} />
+        </Confirmacion>
+      )}
+      {accion === "subsanar" && (
+        <Confirmacion titulo="¿Subsanar y reenviar?" textoAccion="Subsanar y reenviar" ocupado={ocupado}
+          onConfirmar={ejecutar} onCancelar={() => setAccion(null)}>
+          <p>El requerimiento <strong>{detalle.codigo}</strong> vuelve a Registrado y regresa a la bandeja de la Gerencia de Administración.</p>
+          <p>Verifique antes que corrigió lo observado en el expediente físico.</p>
+          <AreaObservacion id="subsanacion" texto="Qué se corrigió (opcional)" valor={texto} onChange={setTexto}
+            ayuda="Se muestra en el historial del expediente." />
+        </Confirmacion>
+      )}
     </div>
   );
 }

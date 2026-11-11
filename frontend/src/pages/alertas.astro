@@ -1,0 +1,7 @@
+---
+import Plantilla from "../layouts/Plantilla.astro";
+import PanelAlertas from "../components/PanelAlertas";
+---
+<Plantilla titulo="Panel de alertas" ruta={["Inicio", "Panel de alertas"]} activo="alertas">
+  <PanelAlertas client:only="react" />
+</Plantilla>

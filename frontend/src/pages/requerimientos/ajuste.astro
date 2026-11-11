@@ -1,0 +1,7 @@
+---
+import Plantilla from "../../layouts/Plantilla.astro";
+import AjusteRequerimiento from "../../components/AjusteRequerimiento";
+---
+<Plantilla titulo="Aplicar ajuste sugerido" ruta={["Inicio", "Mis requerimientos", "Aplicar ajuste"]} activo="mis">
+  <AjusteRequerimiento client:only="react" />
+</Plantilla>

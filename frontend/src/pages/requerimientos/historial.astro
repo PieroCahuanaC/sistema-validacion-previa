@@ -1,0 +1,7 @@
+---
+import Plantilla from "../../layouts/Plantilla.astro";
+import HistorialExpediente from "../../components/HistorialExpediente";
+---
+<Plantilla titulo="Historial de trazabilidad del expediente" ruta={["Inicio", "Historial del expediente"]} activo="">
+  <HistorialExpediente client:only="react" />
+</Plantilla>

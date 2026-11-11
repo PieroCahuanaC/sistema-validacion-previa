@@ -4,6 +4,7 @@ from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.modelos.requerimiento import (
+    AjusteRequerimiento,
     DecisionPresupuesto,
     HistorialEtapa,
     Requerimiento,
@@ -41,6 +42,12 @@ class RepositorioRequerimientos:
         """Decisión de Presupuesto sobre una validación en ámbar (relación 1:1, R16)."""
         return self._sesion.scalar(
             select(DecisionPresupuesto).where(DecisionPresupuesto.id_validacion == id_validacion)
+        )
+
+    def ajuste(self, id_validacion: int) -> AjusteRequerimiento | None:
+        """Ajuste aplicado a una validación en rojo (relación 1:1, R15)."""
+        return self._sesion.scalar(
+            select(AjusteRequerimiento).where(AjusteRequerimiento.id_validacion == id_validacion)
         )
 
     def historial(self, id_requerimiento: int) -> list[HistorialEtapa]:

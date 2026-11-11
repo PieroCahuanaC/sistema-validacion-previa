@@ -8,17 +8,18 @@ import { inicioActual, sesionActual } from "../lib/sesion";
 const SITUACION: Record<string, string> = {
   Verde: "bg-verde-suave text-verde border-verde",
   "Ámbar": "bg-ambar-suave text-ambar border-ambar",
+  "Verde · Confirmado por Presupuesto": "bg-verde-suave text-verde border-verde",
   Rojo: "bg-rojo-suave text-rojo border-rojo",
   Observado: "bg-fondo text-tinta border-pizarra",
 };
 
-function Tarjeta({ titulo, valor, color }: { titulo: string; valor: number; color?: string }) {
+function Tarjeta({ titulo, valor, color, filtro }: { titulo: string; valor: number; color?: string; filtro: string }) {
+  // Cada tarjeta abre Mis requerimientos (P17) con ese filtro (H7).
   return (
-    <div className={`rounded border border-linea bg-superficie p-4 ${color ? `border-l-8 ${color}` : ""}`}
-      title="Mis requerimientos (P17) se habilita en el siguiente incremento">
+    <a href={`/requerimientos?${filtro}`} className={`block rounded border border-linea bg-superficie p-4 hover:bg-fondo ${color ? `border-l-8 ${color}` : ""}`}>
       <p className="text-sm text-pizarra">{titulo}</p>
       <p className="cifra mt-1 text-3xl font-bold">{valor}</p>
-    </div>
+    </a>
   );
 }
 
@@ -57,11 +58,11 @@ export default function Inicio() {
         <section aria-labelledby="titulo-resumen">
           <h2 id="titulo-resumen" className="mb-3 text-lg font-semibold">Requerimientos de su unidad{usuario.unidad?.sigla ? ` (${usuario.unidad.sigla})` : ""}</h2>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-            <Tarjeta titulo="Verde" valor={datos.tarjetas.verde} color="border-l-verde" />
-            <Tarjeta titulo="Ámbar" valor={datos.tarjetas.ambar} color="border-l-ambar" />
-            <Tarjeta titulo="Rojo" valor={datos.tarjetas.rojo} color="border-l-rojo" />
-            <Tarjeta titulo="Observado" valor={datos.tarjetas.observado} />
-            <Tarjeta titulo="Con cuello de botella" valor={datos.tarjetas.cuello_de_botella} />
+            <Tarjeta titulo="Verde" valor={datos.tarjetas.verde} color="border-l-verde" filtro="semaforo=VERDE" />
+            <Tarjeta titulo="Ámbar" valor={datos.tarjetas.ambar} color="border-l-ambar" filtro="semaforo=AMBAR" />
+            <Tarjeta titulo="Rojo" valor={datos.tarjetas.rojo} color="border-l-rojo" filtro="semaforo=ROJO" />
+            <Tarjeta titulo="Observado" valor={datos.tarjetas.observado} filtro="estado=OBSERVADO" />
+            <Tarjeta titulo="Con cuello de botella" valor={datos.tarjetas.cuello_de_botella} filtro="cuello_de_botella=true" />
           </div>
         </section>
       )}
