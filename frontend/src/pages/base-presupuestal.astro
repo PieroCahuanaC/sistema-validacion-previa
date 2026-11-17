@@ -1,0 +1,7 @@
+---
+import Plantilla from "../layouts/Plantilla.astro";
+import BasePresupuestal from "../components/BasePresupuestal";
+---
+<Plantilla titulo="Estado de la base presupuestal y carga CSV de respaldo" ruta={["Inicio", "Base presupuestal"]} activo="base">
+  <BasePresupuestal client:only="react" />
+</Plantilla>

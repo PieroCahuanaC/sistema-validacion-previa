@@ -1,0 +1,7 @@
+---
+import Plantilla from "../layouts/Plantilla.astro";
+import Tablero from "../components/Tablero";
+---
+<Plantilla titulo="Tablero de visibilidad" ruta={["Inicio", "Tablero"]} activo="tablero">
+  <Tablero client:only="react" />
+</Plantilla>

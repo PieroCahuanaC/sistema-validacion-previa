@@ -46,4 +46,5 @@ def test_cpu40_acciones_del_area_usuaria_segun_semaforo_y_ajuste():
     verde_enviado = _situacion(envio=AHORA)
     assert verde_enviado.en_bandeja_de_gerencia and not verde_enviado.puede_anular
     assert horas_a_texto(30) == "1 d 6 h" and horas_a_texto(5) == "5 h"
-    assert horas_a_texto(None) == "—"
+    assert horas_a_texto(None) == "—" and horas_a_texto(0.4) == "menos de 1 h"
+    assert horas_a_texto(0) == "menos de 1 h"

@@ -1,4 +1,4 @@
-"""Pruebas unitarias de la validación del CSV de respaldo (RF-14, R01, RI-09). CP-U18 a CP-U25."""
+"""Pruebas unitarias del CSV de respaldo (RF-14, R01, RI-09). CP-U18 a CP-U26 y CP-U48."""
 
 import pytest
 
@@ -64,3 +64,17 @@ def test_cpu26_ruta_fuera_de_la_carpeta_de_trabajo_se_rechaza(tmp_path):
         resolver_ruta_segura(str(tmp_path / "cargas-secreto" / "x.csv"), str(base))
     with pytest.raises(ValueError, match=".csv"):
         resolver_ruta_segura(str(base / ".env"), str(base))
+
+
+def test_cpu48_csv_exportado_desde_excel_en_espanol():
+    # Excel con configuración regional de Perú: punto y coma, coma decimal y punto de miles.
+    texto = ("meta_codigo;meta_nombre;pim;certificacion;compromiso_anual\r\n"
+             "0012;Vías vecinales;180.000,50;152.000,00;148.500,25\r\n")
+    resultado = validar_csv("MEF", texto)
+    assert resultado.es_valido, resultado.errores
+    fila = resultado.filas[0]
+    assert (str(fila["pim"]), str(fila["compromiso_anual"])) == ("180000.50", "148500.25")
+    pac = validar_csv("SEACE", "numero_referencia;descripcion;tipo_objeto;valor_estimado\n"
+                               "PAC-001;Asfalto, en frío;bien;40000,00\n")
+    assert pac.es_valido and str(pac.filas[0]["valor_estimado"]) == "40000.00"
+    assert pac.filas[0]["descripcion"] == "Asfalto, en frío"
