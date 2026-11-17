@@ -159,6 +159,44 @@ export type Inicio = {
   pendientes: Pendiente[]; pendientes_disponibles: boolean;
 };
 
+// Incremento 4A: tablero (P06), reglas del semáforo (P14) y base presupuestal (P15).
+export type FilaTablero = {
+  requerimiento_id: number; codigo: string; descripcion: string; objeto_contratacion: string;
+  unidad_sigla: string; meta_codigo: string; meta_nombre: string; monto_estimado: string;
+  saldo_disponible: string | null; fecha_necesidad: string; semaforo_vigente: string;
+  estado_codigo: string; estado_actual: string; horas_en_etapa: number | null;
+  plazo_horas: number | null; cuello_de_botella: boolean; cerrado: boolean;
+};
+export type Tablero = {
+  tarjetas: { en_tramite: number; verde: number; ambar: number; rojo: number; observado: number; cuello_de_botella: number; cerrados: number };
+  fecha_corte_mef: string | null; unidad: string | null; metas: { codigo: string; nombre: string }[];
+  filas: FilaTablero[]; total_filas: number; pagina: number; paginas: number; por_pagina: number;
+};
+export type ParametrosSemaforo = {
+  umbral_disponibilidad_pct: number; columna_comparacion: "COMPROMISO" | "CERTIFICACION";
+  tratamiento_no_previsto_pac: "AMBAR" | "VERDE"; antiguedad_maxima_dias: number; valor_uit: string;
+};
+export type VersionRegla = {
+  id_regla: number; vigente_desde: string; vigente_hasta: string | null; parametros: ParametrosSemaforo;
+  cambios: { parametro: string; etiqueta: string; anterior: string; nuevo: string }[]; registrado_por: string;
+};
+export type Reglas = { id_regla: number; vigente_desde: string; parametros: ParametrosSemaforo; historial: VersionRegla[] };
+export type Carga = {
+  id_carga: number; fuente: "MEF" | "SEACE"; origen: "AUTOMATICA" | "MANUAL_CSV"; anio_fiscal: number;
+  fecha_ejecucion: string; fecha_corte: string | null; resultado: "EXITOSA" | "FALLIDA" | "RECHAZADA";
+  detalle_error: string | null;
+};
+export type BasePresupuestal = {
+  anio_fiscal: number; antiguedad_maxima_dias: number; columnas: Record<"MEF" | "SEACE", string[]>;
+  fuentes: { fuente: "MEF" | "SEACE"; nombre: string; ultima_ejecucion: Carga | null; ultima_exitosa: Carga | null; dias_desde_corte: number | null; desactualizado: boolean }[];
+  historial: Carga[];
+};
+export type CargaEntrada = { fuente: "MEF" | "SEACE"; anio_fiscal: number; fecha_corte: string; contenido: string };
+export type ValidacionCarga = {
+  valido: boolean; fuente: string; columnas: string[]; total_filas: number;
+  vista_previa: Record<string, string>[]; errores: string[]; total_errores: number; avisos: string[];
+};
+
 const MENSAJE_TEMPORAL = "Debe cambiar su contraseña temporal antes de continuar.";
 let renovando: Promise<boolean> | null = null;
 
@@ -273,4 +311,15 @@ export const api = {
     pedir<ResultadoCuadro>(`/requerimientos/${id}/cuadro`, json("PUT", datos)),
   decidir: (id: number, resultado: "CONFIRMADA" | "DENEGADA", sustento: string) =>
     pedir<{ semaforo_vigente: string }>(`/alertas/${id}/decision`, json("POST", { resultado, sustento: sustento || null })),
+  // Incremento 4A.
+  tablero: (filtros: Record<string, string>) => {
+    const q = new URLSearchParams(Object.entries(filtros).filter(([, v]) => v));
+    return pedir<Tablero>(`/tablero${q.size ? `?${q}` : ""}`);
+  },
+  reglas: () => pedir<Reglas>("/reglas"),
+  guardarRegla: (parametros: ParametrosSemaforo) => pedir<Reglas>("/reglas", json("POST", parametros)),
+  basePresupuestal: () => pedir<BasePresupuestal>("/base-presupuestal"),
+  validarCarga: (datos: CargaEntrada) => pedir<ValidacionCarga>("/base-presupuestal/validacion", json("POST", datos)),
+  cargar: (datos: CargaEntrada) =>
+    pedir<{ carga: Carga; filas: number; vigente: boolean }>("/base-presupuestal/cargas", json("POST", datos)),
 };

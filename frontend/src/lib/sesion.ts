@@ -24,34 +24,33 @@ export function inicioActual(): Promise<Inicio> {
 export type OpcionMenu = { id: string; texto: string; href: string | null };
 
 // Menú lateral por rol (RF-10, RNF-03; Figura 2 y Tabla 19 de la Práctica 7). Inicio va siempre
-// primero (H4). Las opciones cuya pantalla llega en un incremento posterior se muestran
-// deshabilitadas para que cada rol reconozca desde ya dónde estará su trabajo.
+// primero (H4). Una opción con href nulo se muestra deshabilitada (pantalla aún no disponible).
 export const MENU_POR_ROL: Record<Rol["codigo"], OpcionMenu[]> = {
   AU: [
     { id: "inicio", texto: "Inicio", href: "/inicio" },
     { id: "registrar", texto: "Registrar requerimiento", href: "/requerimientos/nuevo" },
     { id: "mis", texto: "Mis requerimientos", href: "/requerimientos" },
-    { id: "tablero", texto: "Tablero", href: null },
+    { id: "tablero", texto: "Tablero", href: "/tablero" },
   ],
   GA: [
     { id: "inicio", texto: "Inicio", href: "/inicio" },
     { id: "bandeja", texto: "Bandeja de aprobación", href: "/bandeja" },
-    { id: "tablero", texto: "Tablero", href: null },
+    { id: "tablero", texto: "Tablero", href: "/tablero" },
   ],
   JL: [
     { id: "inicio", texto: "Inicio", href: "/inicio" },
     { id: "validacion", texto: "Validación documental", href: "/validacion" },
     { id: "cuadro", texto: "Cuadro comparativo", href: "/cuadro" },
     { id: "orden", texto: "Registrar orden y compromiso", href: "/orden" },
-    { id: "tablero", texto: "Tablero", href: null },
+    { id: "tablero", texto: "Tablero", href: "/tablero" },
   ],
   JP: [
     { id: "inicio", texto: "Inicio", href: "/inicio" },
     { id: "alertas", texto: "Panel de alertas", href: "/alertas" },
     { id: "certificacion", texto: "Registrar certificación", href: "/certificacion" },
-    { id: "reglas", texto: "Configurar reglas del semáforo", href: null },
-    { id: "base", texto: "Base presupuestal", href: null },
-    { id: "tablero", texto: "Tablero", href: null },
+    { id: "reglas", texto: "Configurar reglas del semáforo", href: "/reglas" },
+    { id: "base", texto: "Base presupuestal", href: "/base-presupuestal" },
+    { id: "tablero", texto: "Tablero", href: "/tablero" },
   ],
   ADM: [
     { id: "inicio", texto: "Inicio", href: "/inicio" },

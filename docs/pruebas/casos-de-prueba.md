@@ -1,4 +1,4 @@
-# Casos de prueba — Incrementos 1 a 3 (validación presupuestal; seguridad y acceso; trámite completo)
+# Casos de prueba — Incrementos 1 a 4A (validación presupuestal; seguridad y acceso; trámite completo; tablero y configuración)
 
 Datos de prueba: mock (semillas). Meta 0012: PIM 180 000, certificación 152 000, compromiso anual
 148 500, saldo presupuestal disponible 31 500. Regla inicial: umbral 100 %, columna Compromiso,
@@ -142,3 +142,23 @@ requerimiento de S/ 3,500.00 resulta en rojo) y la 0033 no tiene saldo (ámbar S
 | CP-I55 | API → máquina de estados | CU-13, CU-14, RF-05, RF-07 | Pendiente de JP; certificar por JL; certificar por JP; orden por JP; orden por JL; anular cerrado | Lista de 48 h; 403; Certificado; 403; Orden emitida con tiempos y sin etapas futuras; 409 |
 | CP-I56 | API → máquina de estados → cuadro | Cambio 4 de la P7, R26 | Devolución sin texto; con texto; corrección del cuadro | 422; modo corrección con la observación de Presupuesto; el mismo cuadro corregido y la bitácora con el valor anterior |
 | CP-I57 | API → cuadro → decisión → máquina de estados | Cambio 16 de la P7, RI-20 | Ámbar con el precio de mercado; certificar; denegar; anular sin y con motivo | Pasa a Presupuesto en ámbar; 409; pendiente «Anular por falta de disponibilidad»; 422; Anulado |
+
+## Incremento 4A: tablero, reglas del semáforo y base presupuestal (P06, P14, P15)
+
+| ID | Componente | RF / regla | Entrada | Resultado esperado |
+|---|---|---|---|---|
+| CP-U45 | Orden del tablero | CU-02, P06 | Filas de dos metas, una sin saldo; orden por monto y por tiempo descendente | Meta, saldo y fecha de necesidad; sin saldo o sin tiempo («—») siempre al final |
+| CP-U46 | Filtros y tarjetas del tablero | CU-02, H7 | Verde con cuello de botella, observado, cerrado, rojo y ámbar | El observado no cuenta por color; el cerrado va aparte; conteos 4 en trámite, 1 de cada tipo |
+| CP-U47 | `ParametrosSemaforo` y cambios entre versiones | CU-12, RNF-04 | Umbral 99 y 201; antigüedad 0 y 32; UIT 0 y con tres decimales; valores fuera de lista; parámetro extra | Rechazados; 5500.0 y «5500.00» no son un cambio; se listan solo los parámetros modificados |
+| CP-U48 | `validar_csv` con un CSV de Excel en español | RF-14, R01 | Punto y coma, coma decimal y punto de miles; descripción con coma | Se acepta: 180.000,50 se lee como 180000.50 y la coma del texto se conserva |
+
+| ID | Integración que verifica | RF / regla | Entrada | Resultado esperado |
+|---|---|---|---|---|
+| CP-I58 | API → tablero → situaciones en lote → BD | CU-02, RF-06, RF-08 | Área Usuaria de GDUR y de GSP; Gerencia con filtros de código, semáforo, meta, orden y página | Cada unidad ve solo lo suyo; saldo 31 500 de la meta 0012; sin enviar no corre el plazo; filtros y orden correctos |
+| CP-I59 | API → tablero (cuello de botella) | CU-02 flujo 2a, H3 | Requerimiento enviado, consultado 30 h después; Administrador; semáforo «AZUL» | Marcado como cuello de botella (30 h frente a 24 h) y contado en la tarjeta; 403; 422 |
+| CP-I60 | API → reglas | CU-12, RNF-04 | Otros roles; umbral 250; mismos valores que la vigente | 403; 422; 409 «sin cambios», sin versión nueva |
+| CP-I61 | API → reglas → validación → bitácora | CU-12, RI-10, R14, I-14 | UIT 5 350 y antigüedad 5; pedido de S/ 43 000 | Versión nueva vigente y la anterior cerrada; el tope pasa a S/ 42 800 y rechaza el pedido; las validaciones anteriores conservan su versión; bitácora CONFIG_REGLA con valor anterior y nuevo |
+| CP-I62 | API → base presupuestal (vista previa) | RF-14, R01, H9 | Otros roles; CSV con errores; sin columnas; fechas futuras o fuera del año; CSV válido de 2025 | 403; errores por fila y columna; 422; vista previa con avisos (dato desactualizado, metas nuevas) y sin escribir nada |
+| CP-I63 | API → carga CSV → base presupuestal → bitácora | RF-14, RI-17 | Carga válida; carga con corte anterior; carga con corte posterior sin una meta; PAC | Carga vigente con bitácora EXTRACCION_DATOS; la de corte anterior queda en el historial sin cambiar la base; la posterior desactiva la meta que ya no figura |
+| CP-I64 | API → carga CSV rechazada; estado de las fuentes | RF-14, RI-11 | CSV con compromiso mayor que la certificación; contenido vacío; consulta 10 días después del corte | 422, carga RECHAZADA sin fecha de corte en el historial; 422; MEF marcado como desactualizado (11 días) |
+

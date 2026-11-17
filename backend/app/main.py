@@ -4,7 +4,16 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.v1 import autenticacion, inicio, logistica, requerimientos, tramite, usuarios
+from app.api.v1 import (
+    autenticacion,
+    configuracion,
+    inicio,
+    logistica,
+    requerimientos,
+    tablero,
+    tramite,
+    usuarios,
+)
 from app.core.config import obtener_configuracion
 from app.core.errores import TIPO_PROBLEMA, registrar_manejadores
 
@@ -12,7 +21,7 @@ config = obtener_configuracion()
 
 app = FastAPI(
     title="Sistema presupuestal de validación previa",
-    version="0.2.0",
+    version="0.4.0",
     docs_url="/docs" if config.documentacion_habilitada else None,
     redoc_url=None,
     openapi_url="/openapi.json" if config.documentacion_habilitada else None,
@@ -26,7 +35,8 @@ app.add_middleware(
     allow_headers=["Content-Type"],
 )
 registrar_manejadores(app)
-for modulo in (autenticacion, inicio, logistica, requerimientos, tramite, usuarios):
+for modulo in (autenticacion, configuracion, inicio, logistica, requerimientos, tablero, tramite,
+               usuarios):
     app.include_router(modulo.router, prefix="/api/v1")
 
 METODOS_QUE_MODIFICAN = frozenset({"POST", "PUT", "PATCH", "DELETE"})

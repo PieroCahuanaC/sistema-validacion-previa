@@ -40,9 +40,14 @@ class ResultadoValidacion:
         return not self.errores and bool(self.filas)
 
 
-def _monto(valor: str, columna: str, n_fila: int, errores: list[str]) -> Decimal | None:
+def _monto(valor: str, columna: str, n_fila: int, errores: list[str],
+           coma_decimal: bool = False) -> Decimal | None:
     try:
-        monto = Decimal(valor.strip().replace(",", ""))
+        texto = valor.strip()
+        # Excel en español exporta con punto y coma y coma decimal (180.000,50); con comas
+        # como separador, la coma solo puede ser de miles (180,000.50).
+        texto = texto.replace(".", "").replace(",", ".") if coma_decimal else texto.replace(",", "")
+        monto = Decimal(texto)
     except (InvalidOperation, AttributeError):
         errores.append(f"Fila {n_fila}, columna {columna}: '{valor}' no es un monto numérico.")
         return None
@@ -55,7 +60,11 @@ def _monto(valor: str, columna: str, n_fila: int, errores: list[str]) -> Decimal
 def validar_csv(fuente: str, texto: str) -> ResultadoValidacion:
     """Valida el contenido del CSV según la fuente, sin tocar la base de datos."""
     resultado = ResultadoValidacion()
-    lector = csv.DictReader(io.StringIO(texto.lstrip("﻿")))
+    texto = texto.lstrip("﻿")
+    encabezado = texto.split("\n", 1)[0]
+    separador = ";" if encabezado.count(";") > encabezado.count(",") else ","
+    lector = csv.DictReader(io.StringIO(texto), delimiter=separador)
+    coma_decimal = separador == ";"
     faltantes = [c for c in COLUMNAS[fuente] if c not in (lector.fieldnames or [])]
     if faltantes:
         resultado.errores.append(f"Faltan las columnas: {', '.join(faltantes)}.")
@@ -64,10 +73,10 @@ def validar_csv(fuente: str, texto: str) -> ResultadoValidacion:
     claves_vistas: set[str] = set()
     for n_fila, fila in enumerate(lector, start=2):
         if fuente == "MEF":
-            limpia = _validar_fila_mef(fila, n_fila, resultado.errores)
+            limpia = _validar_fila_mef(fila, n_fila, resultado.errores, coma_decimal)
             clave = fila["meta_codigo"].strip()
         else:
-            limpia = _validar_fila_seace(fila, n_fila, resultado.errores)
+            limpia = _validar_fila_seace(fila, n_fila, resultado.errores, coma_decimal)
             clave = fila["numero_referencia"].strip()
         if clave in claves_vistas:
             resultado.errores.append(f"Fila {n_fila}: el código '{clave}' está repetido.")
@@ -80,14 +89,15 @@ def validar_csv(fuente: str, texto: str) -> ResultadoValidacion:
     return resultado
 
 
-def _validar_fila_mef(fila: dict, n_fila: int, errores: list[str]) -> dict | None:
+def _validar_fila_mef(fila: dict, n_fila: int, errores: list[str],
+                      coma_decimal: bool = False) -> dict | None:
     codigo, nombre = fila["meta_codigo"].strip(), fila["meta_nombre"].strip()
     if not codigo or not nombre:
         errores.append(f"Fila {n_fila}: el código y el nombre de la meta son obligatorios.")
         return None
-    pim = _monto(fila["pim"], "pim", n_fila, errores)
-    cert = _monto(fila["certificacion"], "certificacion", n_fila, errores)
-    comp = _monto(fila["compromiso_anual"], "compromiso_anual", n_fila, errores)
+    pim = _monto(fila["pim"], "pim", n_fila, errores, coma_decimal)
+    cert = _monto(fila["certificacion"], "certificacion", n_fila, errores, coma_decimal)
+    comp = _monto(fila["compromiso_anual"], "compromiso_anual", n_fila, errores, coma_decimal)
     if pim is None or cert is None or comp is None:
         return None
     if not comp <= cert <= pim:
@@ -99,7 +109,8 @@ def _validar_fila_mef(fila: dict, n_fila: int, errores: list[str]) -> dict | Non
             "compromiso_anual": comp}
 
 
-def _validar_fila_seace(fila: dict, n_fila: int, errores: list[str]) -> dict | None:
+def _validar_fila_seace(fila: dict, n_fila: int, errores: list[str],
+                        coma_decimal: bool = False) -> dict | None:
     referencia, descripcion = fila["numero_referencia"].strip(), fila["descripcion"].strip()
     tipo = fila["tipo_objeto"].strip().upper()
     if not referencia or not descripcion:
@@ -108,7 +119,7 @@ def _validar_fila_seace(fila: dict, n_fila: int, errores: list[str]) -> dict | N
     if tipo not in TIPOS_OBJETO_PAC:
         errores.append(f"Fila {n_fila}: tipo de objeto '{tipo}' no válido.")
         return None
-    valor = _monto(fila["valor_estimado"], "valor_estimado", n_fila, errores)
+    valor = _monto(fila["valor_estimado"], "valor_estimado", n_fila, errores, coma_decimal)
     if valor is None:
         return None
     return {"numero_referencia": referencia, "descripcion": descripcion, "tipo_objeto": tipo,
@@ -116,13 +127,18 @@ def _validar_fila_seace(fila: dict, n_fila: int, errores: list[str]) -> dict | N
 
 
 def cargar_csv(
-    sesion: Session, fuente: str, anio_fiscal: int, fecha_corte: datetime, texto: str
+    sesion: Session, fuente: str, anio_fiscal: int, fecha_corte: datetime, texto: str, *,
+    fecha_ejecucion: datetime | None = None, confirmar: bool = True,
 ) -> CargaDatos:
-    """Valida y registra la carga en una sola transacción; devuelve la carga creada."""
+    """Valida y registra la carga en una sola transacción; devuelve la carga creada.
+
+    Con confirmar=False no hace commit, para que quien llama agregue la bitácora en la misma
+    transacción (P15).
+    """
     validacion = validar_csv(fuente, texto)
     carga = CargaDatos(
         fuente=fuente, origen="MANUAL_CSV", anio_fiscal=anio_fiscal,
-        fecha_ejecucion=datetime.now(ZoneInfo("America/Lima")),
+        fecha_ejecucion=fecha_ejecucion or datetime.now(ZoneInfo("America/Lima")),
         fecha_corte=fecha_corte if validacion.es_valido else None,
         resultado="EXITOSA" if validacion.es_valido else "RECHAZADA",
         detalle_error=None if validacion.es_valido else "; ".join(validacion.errores)[:500],
@@ -134,11 +150,15 @@ def cargar_csv(
             _persistir_saldos(sesion, carga, validacion.filas)
         else:
             sesion.add_all(PacItem(id_carga=carga.id_carga, **f) for f in validacion.filas)
-    sesion.commit()
+            sesion.flush()
+    if confirmar:
+        sesion.commit()
     return carga
 
 
 def _persistir_saldos(sesion: Session, carga: CargaDatos, filas: list[dict]) -> None:
+    ids_cargados = set()
+    vigente = es_la_mas_reciente(sesion, carga)
     for fila in filas:
         meta = sesion.scalar(
             select(MetaPresupuestal).where(
@@ -154,6 +174,38 @@ def _persistir_saldos(sesion: Session, carga: CargaDatos, filas: list[dict]) -> 
         sesion.add(SaldoMeta(id_meta=meta.id_meta, id_carga=carga.id_carga, pim=fila["pim"],
                              certificacion=fila["certificacion"],
                              compromiso_anual=fila["compromiso_anual"]))
+        ids_cargados.add(meta.id_meta)
+        if vigente:
+            meta.nombre = fila["nombre"]
+    sesion.flush()
+    if vigente:
+        _sincronizar_metas_activas(sesion, carga.anio_fiscal, ids_cargados)
+
+
+def es_la_mas_reciente(sesion: Session, carga: CargaDatos) -> bool:
+    """La carga pasa a ser la vigente si ninguna carga exitosa tiene una fecha de corte posterior.
+
+    Una carga con fecha de corte anterior a la vigente queda en el historial, pero no cambia
+    los saldos con los que se valida (RI-17: se usa la última carga exitosa por fecha de corte).
+    """
+    posterior = sesion.scalar(
+        select(CargaDatos.id_carga).where(
+            CargaDatos.fuente == carga.fuente, CargaDatos.anio_fiscal == carga.anio_fiscal,
+            CargaDatos.resultado == "EXITOSA", CargaDatos.id_carga != carga.id_carga,
+            CargaDatos.fecha_corte > carga.fecha_corte,
+        ).limit(1))
+    return posterior is None
+
+
+def _sincronizar_metas_activas(sesion: Session, anio_fiscal: int, ids_cargados: set[int]) -> None:
+    """Solo las metas de la carga vigente se ofrecen al registrar (P03: metas del ejercicio).
+
+    Las metas que ya no figuran se desactivan, no se borran: los requerimientos que las usan
+    conservan su referencia y, si se revalidan, quedan en ámbar por falta de datos.
+    """
+    for meta in sesion.scalars(select(MetaPresupuestal).where(
+            MetaPresupuestal.anio_fiscal == anio_fiscal)):
+        meta.activa = meta.id_meta in ids_cargados
 
 
 def resolver_ruta_segura(ruta: str, carpeta_base: str) -> str:

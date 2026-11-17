@@ -1,0 +1,7 @@
+---
+import Plantilla from "../layouts/Plantilla.astro";
+import ConfigurarReglas from "../components/ConfigurarReglas";
+---
+<Plantilla titulo="Configurar reglas del semáforo" ruta={["Inicio", "Configurar reglas"]} activo="reglas">
+  <ConfigurarReglas client:only="react" />
+</Plantilla>

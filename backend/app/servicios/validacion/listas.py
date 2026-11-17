@@ -11,7 +11,11 @@ from app.esquemas.tramite import AlertaSalida, AlertasSalida, BandejaFila, MiReq
 from app.modelos.catalogos import Estado, UnidadOrganica
 from app.modelos.presupuesto import CargaDatos, MetaPresupuestal, SaldoMeta
 from app.modelos.requerimiento import Requerimiento
-from app.servicios.validacion.situacion import Situacion, situacion, situaciones_abiertas
+from app.servicios.validacion.situacion import (
+    Situacion,
+    situaciones_abiertas,
+    situaciones_en_lote,
+)
 from app.servicios.validacion.vigencia import SemaforoVigente
 
 
@@ -55,8 +59,8 @@ def mis_requerimientos(
         consulta = consulta.where(Requerimiento.codigo.ilike(f"%{buscar.strip()}%"))
     metas = {m.id_meta: m.codigo for m in sesion.scalars(select(MetaPresupuestal))}
     filas = []
-    for req in sesion.scalars(consulta):
-        s = situacion(sesion, req)
+    for s in situaciones_en_lote(sesion, list(sesion.scalars(consulta))):
+        req = s.requerimiento
         if semaforo and (s.codigo_estado == "OBSERVADO" or not s.vigente.startswith(semaforo)):
             continue  # como en las tarjetas de la P02, los observados no se cuentan por color
         if cuello_de_botella and not (ahora and not s.estado.es_final and s.excedido(ahora)):

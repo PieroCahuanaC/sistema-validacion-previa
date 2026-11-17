@@ -8,7 +8,7 @@ de la Tabla 26 de la Práctica 7).
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.modelos.catalogos import Estado
@@ -126,6 +126,49 @@ def situacion(sesion: Session, requerimiento: Requerimiento) -> Situacion:
     )
 
 
+def situaciones_en_lote(sesion: Session, requerimientos: list[Requerimiento]) -> list[Situacion]:
+    """Situación de varios requerimientos con un número fijo de consultas, en el mismo orden.
+
+    Equivale a llamar a situacion() por cada uno, pero las listas (P02, P06, P08, P11, P17)
+    no crecen en consultas con el número de requerimientos (RNF de rendimiento).
+    """
+    if not requerimientos:
+        return []
+    ids = [r.id_requerimiento for r in requerimientos]
+    ultimas = (select(ValidacionPresupuestal)
+               .where(ValidacionPresupuestal.id_requerimiento.in_(ids))
+               .distinct(ValidacionPresupuestal.id_requerimiento)
+               .order_by(ValidacionPresupuestal.id_requerimiento,
+                         ValidacionPresupuestal.fecha_hora.desc(),
+                         ValidacionPresupuestal.id_validacion.desc()))
+    validaciones = {v.id_requerimiento: v for v in sesion.scalars(ultimas)}
+    ids_validacion = [v.id_validacion for v in validaciones.values()]
+    decisiones = {d.id_validacion: d for d in sesion.scalars(
+        select(DecisionPresupuesto).where(DecisionPresupuesto.id_validacion.in_(ids_validacion)))}
+    ajustes = {a.id_validacion: a for a in sesion.scalars(
+        select(AjusteRequerimiento).where(AjusteRequerimiento.id_validacion.in_(ids_validacion)))}
+    desde = dict(sesion.execute(
+        select(HistorialEtapa.id_requerimiento, func.max(HistorialEtapa.fecha_hora))
+        .where(HistorialEtapa.id_requerimiento.in_(ids))
+        .group_by(HistorialEtapa.id_requerimiento)).tuples().all())
+    estados = {e.id_estado: e for e in sesion.scalars(select(Estado))}
+
+    resultado = []
+    for req in requerimientos:
+        validacion = validaciones.get(req.id_requerimiento)
+        if validacion is None:
+            raise RuntimeError("Todo requerimiento tiene al menos una validación (R12).")
+        decision = decisiones.get(validacion.id_validacion)
+        resultado.append(Situacion(
+            requerimiento=req, estado=estados[req.id_estado_actual], validacion=validacion,
+            decision=decision, ajuste=ajustes.get(validacion.id_validacion),
+            vigente=semaforo_vigente(validacion.estado_semaforo,
+                                     decision.resultado if decision else None),
+            desde=desde.get(req.id_requerimiento) or req.fecha_registro,
+        ))
+    return resultado
+
+
 def situaciones_abiertas(sesion: Session, id_unidad: int | None = None) -> list[Situacion]:
     """Requerimientos no cerrados (de una unidad, si se indica), del más antiguo al más nuevo."""
     consulta = (select(Requerimiento)
@@ -133,12 +176,14 @@ def situaciones_abiertas(sesion: Session, id_unidad: int | None = None) -> list[
                 .where(Estado.es_final.is_(False)).order_by(Requerimiento.fecha_registro))
     if id_unidad is not None:
         consulta = consulta.where(Requerimiento.id_unidad == id_unidad)
-    return [situacion(sesion, r) for r in sesion.scalars(consulta)]
+    return situaciones_en_lote(sesion, list(sesion.scalars(consulta)))
 
 
 def horas_a_texto(horas: float | None) -> str:
     if horas is None:
         return "—"
+    if 0 <= horas < 1:  # igual que en la interfaz: un trámite recién movido no muestra «0 h»
+        return "menos de 1 h"
     total = timedelta(hours=horas)
     dias, resto = divmod(int(total.total_seconds()) // 3600, 24)
     return f"{dias} d {resto} h" if dias else f"{resto} h"
