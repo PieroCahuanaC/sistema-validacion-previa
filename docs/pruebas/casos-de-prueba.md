@@ -1,4 +1,4 @@
-# Casos de prueba — Incrementos 1 a 4A (validación presupuestal; seguridad y acceso; trámite completo; tablero y configuración)
+# Casos de prueba — Incrementos 1 a 4B (validación presupuestal; seguridad y acceso; trámite completo; tablero y configuración; extracción automática)
 
 Datos de prueba: mock (semillas). Meta 0012: PIM 180 000, certificación 152 000, compromiso anual
 148 500, saldo presupuestal disponible 31 500. Regla inicial: umbral 100 %, columna Compromiso,
@@ -161,4 +161,18 @@ requerimiento de S/ 3,500.00 resulta en rojo) y la 0033 no tiene saldo (ámbar S
 | CP-I62 | API → base presupuestal (vista previa) | RF-14, R01, H9 | Otros roles; CSV con errores; sin columnas; fechas futuras o fuera del año; CSV válido de 2025 | 403; errores por fila y columna; 422; vista previa con avisos (dato desactualizado, metas nuevas) y sin escribir nada |
 | CP-I63 | API → carga CSV → base presupuestal → bitácora | RF-14, RI-17 | Carga válida; carga con corte anterior; carga con corte posterior sin una meta; PAC | Carga vigente con bitácora EXTRACCION_DATOS; la de corte anterior queda en el historial sin cambiar la base; la posterior desactiva la meta que ya no figura |
 | CP-I64 | API → carga CSV rechazada; estado de las fuentes | RF-14, RI-11 | CSV con compromiso mayor que la certificación; contenido vacío; consulta 10 días después del corte | 422, carga RECHAZADA sin fecha de corte en el historial; 422; MEF marcado como desactualizado (11 días) |
+
+## Incremento 4B: extracción automática de la base presupuestal del MEF (RF-14)
+
+| ID | Componente | RF / regla | Entrada | Resultado esperado |
+|---|---|---|---|---|
+| CP-U49 | `saldos_por_meta` | RF-14 | ZIP con dos meses de una meta, otra meta, una meta sin PIM y filas de otras ejecutoras que contienen «300354» en otra columna | Suma por meta solo de la ejecutora 300354; código con cuatro dígitos; la meta sin PIM se omite; el resultado pasa la validación del CSV |
+| CP-U50 | `saldos_por_meta` ante un formato inesperado | R01 | Falta una columna; ninguna fila de la ejecutora; monto no numérico; página HTML en lugar del ZIP | `ErrorExtraccion` con el motivo |
+| CP-U51 | Fecha de corte, reintentos y ruta del archivo | RF-14, R01, CWE-22 | Publicación del 17/11 a las 08:48 y a las 22:00 de Lima; dos fallas y un éxito; tres fallas; `--archivo /etc/passwd` | Corte al 16/11; éxito al tercer intento; error tras tres intentos; ruta rechazada (código 2) |
+
+| ID | Integración que verifica | RF / regla | Entrada | Resultado esperado |
+|---|---|---|---|---|
+| CP-I65 | Extracción → carga → base presupuestal → bitácora | RF-14 | Publicación nueva; luego la misma publicación | Carga AUTOMATICA vigente con dos metas y bitácora del actor EXTRACCION_MEF; la segunda vez «sin cambios», sin descargar |
+| CP-I66 | Extracción ante la caída o el cambio de la fuente | R01 | Descarga agotada; archivo con otras columnas | Carga FALLIDA con el motivo y bitácora ERROR; la carga vigente no cambia |
+| CP-I67 | Extracción con datos incoherentes; contingencia con ZIP local | RI-09, RF-14 | Certificación mayor que el PIM; ZIP local con corte posterior sin una meta; ZIP sin fecha de corte | RECHAZADA sin saldos; la carga local pasa a vigente y desactiva la meta ausente; sin corte, FALLIDA |
 

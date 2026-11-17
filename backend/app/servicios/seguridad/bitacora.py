@@ -45,11 +45,13 @@ def registrar(
     sesion: Session, momento: datetime, contexto: Contexto, accion: str, resultado: str, *,
     id_usuario: int | None = None, id_rol: int | None = None, recurso_tipo: str | None = None,
     recurso_id: int | None = None, detalle: dict[str, Any] | None = None,
+    actor_servicio: str | None = None,
 ) -> Bitacora:
     sesion.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _LLAVE_BLOQUEO})
     previo = sesion.scalar(select(Bitacora).order_by(Bitacora.id_bitacora.desc()).limit(1))
     registro = Bitacora(
-        fecha_hora=momento, id_usuario=id_usuario, id_rol=id_rol, accion=accion,
+        fecha_hora=momento, id_usuario=id_usuario, id_rol=id_rol, actor_servicio=actor_servicio,
+        accion=accion,
         recurso_tipo=recurso_tipo, recurso_id=recurso_id, resultado=resultado,
         detalle=detalle, ip_origen=contexto.ip_origen, id_traza=contexto.id_traza,
         hash_anterior=resumen_registro(previo) if previo else None,

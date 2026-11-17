@@ -1,0 +1,50 @@
+# Extracción automática de la base presupuestal del MEF (RF-14; plan de respuesta del R01).
+# Descarga el archivo diario «Presupuesto y Ejecución de Gasto» de los datos abiertos del MEF
+# (proveniente de la Consulta Amigable), suma el PIM, la certificación y el compromiso anual por
+# meta de la Municipalidad Distrital de Uchumayo y los carga en la base del ambiente.
+# Si el MEF no publicó datos nuevos, termina sin cambios; si algo falla, registra la carga como
+# FALLIDA, el semáforo sigue con la última carga buena y la ejecución queda en rojo en Actions.
+name: Extracción MEF
+
+on:
+  schedule:
+    # 05:17 y 11:17 de Lima (UTC−5). El MEF publica el archivo en la mañana; la segunda
+    # ejecución recoge la publicación del día y la primera cubre un retraso del día anterior.
+    # GitHub puede iniciar las ejecuciones programadas con retraso.
+    - cron: "17 10,16 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: extraccion-mef
+  cancel-in-progress: false
+
+jobs:
+  extraer:
+    name: Extraer saldos por meta del MEF
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - run: pip install -r requirements.txt
+      - name: Extraer y cargar
+        env:
+          # Cadena de conexión del ambiente (secreto del repositorio; nunca en el código).
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          AMBIENTE: calidad
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Falta el secreto DATABASE_URL en Settings > Secrets and variables > Actions."
+            exit 1
+          fi
+          python -m app.extraccion.mef

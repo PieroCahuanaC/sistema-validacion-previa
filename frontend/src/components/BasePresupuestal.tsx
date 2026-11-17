@@ -28,7 +28,7 @@ function Resultado({ valor }: { valor: Carga["resultado"] }) {
   const texto = { EXITOSA: "Exitosa", RECHAZADA: "Rechazada", FALLIDA: "Fallida" }[valor];
   return <span className={`inline-block rounded border px-2 py-0.5 text-xs font-semibold ${RESULTADO[valor]}`}>{texto}</span>;
 }
-const origen = (o: Carga["origen"]) => (o === "AUTOMATICA" ? "Automática" : "Carga manual (CSV)");
+const origen = (o: Carga["origen"]) => (o === "AUTOMATICA" ? "Automática (datos abiertos del MEF)" : "Carga manual (CSV)");
 
 /** Lee el archivo como UTF-8 y, si no lo es (CSV guardado por Excel), como Windows-1252. */
 async function leer(archivo: File): Promise<string> {
@@ -49,7 +49,7 @@ export default function BasePresupuestal() {
   const [datos, setDatos] = useState<DatosBase | null>(null);
   const [fuente, setFuente] = useState<Fuente>("MEF");
   const [anio, setAnio] = useState("");
-  const [corte, setCorte] = useState(hoyLima());
+  const [corte, setCorte] = useState(""); // sin valor por defecto: un corte mal puesto tapa la carga automática
   const [archivo, setArchivo] = useState<File | null>(null);
   const [previa, setPrevia] = useState<ValidacionCarga | null>(null);
   const [validado, setValidado] = useState<CargaEntrada | null>(null);
@@ -126,8 +126,11 @@ export default function BasePresupuestal() {
           </div>
         ))}
       </section>
+      {!sinAutomatica && (
+        <p className="text-sm text-pizarra">Los saldos del MEF se actualizan automáticamente dos veces al día. El PAC del SEACE se carga con el archivo CSV, porque el SEACE no lo publica en un formato descargable.</p>
+      )}
       {sinAutomatica && (
-        <p className="text-sm text-pizarra">La extracción automática diaria todavía no está activa: mientras tanto, la base se actualiza con la carga manual de abajo.</p>
+        <p className="text-sm text-pizarra">La extracción automática diaria del MEF todavía no se ha ejecutado en este ambiente: mientras tanto, la base se actualiza con la carga manual de abajo.</p>
       )}
 
       <section aria-labelledby="titulo-carga" className="space-y-4 rounded border border-linea bg-superficie p-5">

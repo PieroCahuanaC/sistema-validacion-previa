@@ -129,6 +129,7 @@ def _validar_fila_seace(fila: dict, n_fila: int, errores: list[str],
 def cargar_csv(
     sesion: Session, fuente: str, anio_fiscal: int, fecha_corte: datetime, texto: str, *,
     fecha_ejecucion: datetime | None = None, confirmar: bool = True,
+    origen: str = "MANUAL_CSV",
 ) -> CargaDatos:
     """Valida y registra la carga en una sola transacción; devuelve la carga creada.
 
@@ -137,7 +138,7 @@ def cargar_csv(
     """
     validacion = validar_csv(fuente, texto)
     carga = CargaDatos(
-        fuente=fuente, origen="MANUAL_CSV", anio_fiscal=anio_fiscal,
+        fuente=fuente, origen=origen, anio_fiscal=anio_fiscal,
         fecha_ejecucion=fecha_ejecucion or datetime.now(ZoneInfo("America/Lima")),
         fecha_corte=fecha_corte if validacion.es_valido else None,
         resultado="EXITOSA" if validacion.es_valido else "RECHAZADA",
@@ -159,18 +160,17 @@ def cargar_csv(
 def _persistir_saldos(sesion: Session, carga: CargaDatos, filas: list[dict]) -> None:
     ids_cargados = set()
     vigente = es_la_mas_reciente(sesion, carga)
+    metas = {m.codigo: m for m in sesion.scalars(
+        select(MetaPresupuestal).where(MetaPresupuestal.anio_fiscal == carga.anio_fiscal))}
     for fila in filas:
-        meta = sesion.scalar(
-            select(MetaPresupuestal).where(
-                MetaPresupuestal.anio_fiscal == carga.anio_fiscal,
-                MetaPresupuestal.codigo == fila["codigo"],
-            )
-        )
+        meta = metas.get(fila["codigo"])
         if meta is None:
+            # Una meta nueva solo se ofrece al registrar si esta carga es la vigente.
             meta = MetaPresupuestal(anio_fiscal=carga.anio_fiscal, codigo=fila["codigo"],
-                                    nombre=fila["nombre"])
+                                    nombre=fila["nombre"], activa=vigente)
             sesion.add(meta)
             sesion.flush()
+            metas[meta.codigo] = meta
         sesion.add(SaldoMeta(id_meta=meta.id_meta, id_carga=carga.id_carga, pim=fila["pim"],
                              certificacion=fila["certificacion"],
                              compromiso_anual=fila["compromiso_anual"]))
