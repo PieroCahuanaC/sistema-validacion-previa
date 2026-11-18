@@ -21,6 +21,7 @@ from app.modelos.seguridad import Bitacora
 # Bloqueo de transacción que serializa la escritura de la cadena (dos inserciones simultáneas
 # no pueden tomar el mismo registro previo).
 _LLAVE_BLOQUEO = 4_208_201
+_ULTIMO_EN_TRANSACCION = "bitacora_ultimo_registro"
 
 
 @dataclass(frozen=True)
@@ -47,8 +48,15 @@ def registrar(
     recurso_id: int | None = None, detalle: dict[str, Any] | None = None,
     actor_servicio: str | None = None,
 ) -> Bitacora:
-    sesion.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _LLAVE_BLOQUEO})
-    previo = sesion.scalar(select(Bitacora).order_by(Bitacora.id_bitacora.desc()).limit(1))
+    # Dentro de una misma transacción, el bloqueo ya está tomado y el registro previo es el
+    # que se acaba de insertar: no hace falta volver a pedirlos (defecto DEF-02, P9).
+    transaccion = sesion.get_transaction()
+    anterior = sesion.info.get(_ULTIMO_EN_TRANSACCION)
+    if anterior is not None and anterior[0] is transaccion:
+        previo = anterior[1]
+    else:
+        sesion.execute(text("SELECT pg_advisory_xact_lock(:k)"), {"k": _LLAVE_BLOQUEO})
+        previo = sesion.scalar(select(Bitacora).order_by(Bitacora.id_bitacora.desc()).limit(1))
     registro = Bitacora(
         fecha_hora=momento, id_usuario=id_usuario, id_rol=id_rol, actor_servicio=actor_servicio,
         accion=accion,
@@ -58,6 +66,7 @@ def registrar(
     )
     sesion.add(registro)
     sesion.flush()
+    sesion.info[_ULTIMO_EN_TRANSACCION] = (transaccion, registro)
     return registro
 
 

@@ -259,7 +259,7 @@ def main(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if args.archivo is not None:
         try:  # solo archivos dentro de la carpeta de trabajo (CWE-22, hallazgo HE-06)
-            args.archivo = Path(resolver_ruta_segura(str(args.archivo), os.getcwd()))
+            args.archivo = Path(resolver_ruta_segura(str(args.archivo), os.getcwd(), ".zip"))
         except ValueError as error:
             print(error)
             return 2

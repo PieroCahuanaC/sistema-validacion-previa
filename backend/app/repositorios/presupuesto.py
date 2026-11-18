@@ -1,6 +1,6 @@
 """Acceso a la base presupuestal y al PAC."""
 
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session
 
 from app.modelos.presupuesto import CargaDatos, MetaPresupuestal, PacItem, SaldoMeta
@@ -20,6 +20,22 @@ class RepositorioPresupuesto:
             .limit(1)
         )
 
+    def ultima_carga_con_saldo(
+        self, anio_fiscal: int, id_meta: int
+    ) -> tuple[CargaDatos | None, SaldoMeta | None]:
+        """Última carga exitosa del MEF y el saldo de la meta en ella, en una sola consulta
+        (RI-17; defecto DEF-02 de la Práctica 9). El saldo es None si la meta no figura."""
+        fila = self._sesion.execute(
+            select(CargaDatos, SaldoMeta)
+            .outerjoin(SaldoMeta, and_(SaldoMeta.id_carga == CargaDatos.id_carga,
+                                       SaldoMeta.id_meta == id_meta))
+            .where(CargaDatos.fuente == "MEF", CargaDatos.resultado == "EXITOSA",
+                   CargaDatos.anio_fiscal == anio_fiscal)
+            .order_by(CargaDatos.fecha_corte.desc(), CargaDatos.id_carga.desc())
+            .limit(1)
+        ).first()
+        return (fila[0], fila[1]) if fila else (None, None)
+
     def meta_activa(self, anio_fiscal: int, codigo: str) -> MetaPresupuestal | None:
         return self._sesion.scalar(
             select(MetaPresupuestal).where(
@@ -35,11 +51,6 @@ class RepositorioPresupuesto:
             .where(MetaPresupuestal.anio_fiscal == anio_fiscal, MetaPresupuestal.activa.is_(True))
             .order_by(MetaPresupuestal.codigo)
         ))
-
-    def saldo(self, id_meta: int, id_carga: int) -> SaldoMeta | None:
-        return self._sesion.scalar(
-            select(SaldoMeta).where(SaldoMeta.id_meta == id_meta, SaldoMeta.id_carga == id_carga)
-        )
 
     def saldos_de_carga(self, id_carga: int) -> dict[int, SaldoMeta]:
         saldos = self._sesion.scalars(select(SaldoMeta).where(SaldoMeta.id_carga == id_carga))

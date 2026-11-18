@@ -40,6 +40,19 @@ const LECTURA = lista(__ENV.NIVELES_LECTURA, "25,50,100,150,200");
 export const tRegistro = new Trend("t_registro", true); // RNF-01: registro con semáforo
 export const tFormulario = new Trend("t_formulario", true); // apertura del formulario P03
 const sinCerrar = new Counter("requerimientos_sin_cerrar");
+// Respuestas fallidas por tipo, para explicar el % de errores de cada nivel.
+export const CODIGOS = {
+  ocupado_503: new Counter("resp_503_ocupado"), error_5xx: new Counter("resp_5xx_otros"),
+  cliente_4xx: new Counter("resp_4xx"), sin_respuesta: new Counter("resp_sin_respuesta"),
+};
+
+function contar(respuesta) {
+  const s = respuesta.status;
+  if (s === 0) CODIGOS.sin_respuesta.add(1); // tiempo agotado o conexión rechazada
+  else if (s === 503) CODIGOS.ocupado_503.add(1);
+  else if (s >= 500) CODIGOS.error_5xx.add(1);
+  else if (s >= 400) CODIGOS.cliente_4xx.add(1);
+}
 
 const nombre = (flujo, n) => `${flujo}_u${String(n).padStart(3, "0")}`;
 
@@ -58,6 +71,8 @@ function construirEscenarios() {
     umbrales[`${metrica}{scenario:${esc}}`] = ["p(95)<3000"];
     umbrales[`http_req_failed{scenario:${esc}}`] = ["rate<0.01"];
     umbrales[`http_req_duration{scenario:${esc}}`] = ["p(95)<3000"];
+    // Umbrales siempre verdaderos: solo hacen que el resumen traiga la cuenta por nivel.
+    Object.values(CODIGOS).forEach((c) => { umbrales[`${c.name}{scenario:${esc}}`] = ["count>=0"]; });
     inicio += DURACION + 10 + SEPARACION;
   };
   ESCRITURA.forEach((n) => agregar("escritura", n, "t_registro"));
@@ -135,6 +150,7 @@ function abrirFormulario(datos) {
     ["GET", `${API}/regla-vigente`, null, { ...opciones, tags: { paso: "regla" } }],
   ]);
   tFormulario.add(Date.now() - inicio);
+  respuestas.forEach(contar);
   check(respuestas, { "formulario P03 cargado": (r) => r.every((x) => x.status === 200) });
 }
 
@@ -157,6 +173,7 @@ export function escritura(datos) {
   const registro = http.post(`${API}/requerimientos`, JSON.stringify(cuerpo),
     { ...opciones, tags: { paso: "registro" } });
   tRegistro.add(registro.timings.duration);
+  contar(registro);
   if (!check(registro, { "registro con semáforo (201)": (r) => r.status === 201 })) {
     sleep(PAUSA);
     return;
@@ -165,6 +182,7 @@ export function escritura(datos) {
   const rojo = registro.json("estado_semaforo") === "ROJO";
 
   const detalle = http.get(`${API}/requerimientos/${id}`, { ...opciones, tags: { paso: "detalle" } });
+  contar(detalle);
   check(detalle, { "detalle (200)": (r) => r.status === 200 });
 
   // Cierre por la vía del sistema: ajuste «Ninguna» y anulación (RI-25).
@@ -172,10 +190,12 @@ export function escritura(datos) {
   if (rojo) {
     const ajuste = http.post(`${API}/requerimientos/${id}/ajustes`,
       JSON.stringify({ opcion: "NINGUNA" }), { ...opciones, tags: { paso: "ajuste" } });
+    contar(ajuste);
     if (check(ajuste, { "ajuste Ninguna (200)": (r) => r.status === 200 })) {
       const anulacion = http.patch(`${API}/requerimientos/${id}/etapa`,
         JSON.stringify({ destino: "ANULADO", observacion: MARCA }),
         { ...opciones, tags: { paso: "anulacion" } });
+      contar(anulacion);
       cerrado = check(anulacion, { "anulación (200)": (r) => r.status === 200 });
     }
   }

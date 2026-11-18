@@ -1,4 +1,5 @@
-"""Pruebas de integración de la extracción automática del MEF (RF-14, R01). CP-I65 a CP-I67.
+"""Pruebas de integración de la extracción automática del MEF (RF-14, R01).
+CP-I65 a CP-I67 y CP-I70.
 
 Usan el año fiscal 2024 para no tocar la base de 2026 con la que trabajan las demás pruebas, y
 una fuente simulada en lugar del portal del MEF (la descarga real se prueba a mano, ver
@@ -104,3 +105,23 @@ def test_cpi67_datos_incoherentes_se_rechazan_y_carga_desde_archivo(sesion, tmp_
         MetaPresupuestal.anio_fiscal == ANIO, MetaPresupuestal.activa.is_(True))).all()
     assert activas == ["0012"]
     assert ejecutar(sesion, ANIO, AHORA_FIJO, archivo=archivo).resultado == "FALLIDA"  # sin corte
+
+
+def test_cpi70_linea_de_comandos_con_archivo_zip_y_csv(sesion, tmp_path, monkeypatch, capsys):
+    """Defecto DEF-06: la contingencia por línea de comandos con el ZIP del MEF se rechazaba
+    por la extensión. Usa 2024, como las demás pruebas de este archivo, con un corte posterior."""
+    from app.extraccion import carga_csv, mef
+
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "2024-Gasto-Diario.zip").write_bytes(zip_mef(FILAS[0]).getvalue())
+    assert mef.main(["--anio", "2024", "--archivo", "2024-Gasto-Diario.zip",
+                     "--corte", "2024-12-31"]) == 0
+    assert "Extracción MEF 2024: EXITOSA" in capsys.readouterr().out
+
+    (tmp_path / "pac.csv").write_text(
+        "numero_referencia,descripcion,tipo_objeto,valor_estimado\nPAC-9,Asfalto,BIEN,1000\n",
+        encoding="utf-8")
+    assert carga_csv.main(["SEACE", "2024", "2024-12-31", "pac.csv"]) == 0
+    assert "EXITOSA" in capsys.readouterr().out
+    sesion.expire_all()
+    assert RepositorioPresupuesto(sesion).ultima_carga_exitosa("SEACE", 2024) is not None

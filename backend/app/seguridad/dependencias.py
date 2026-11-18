@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import Annotated
 
 from fastapi import Depends, Request
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.db import obtener_sesion
@@ -47,13 +48,19 @@ def usuario_sesion(
     carga = tokens.leer_acceso(token, reloj()) if token else None
     if carga is None:
         raise _no_autenticado()
-    fila = sesion.get(SesionUsuario, int(carga["sid"]))
-    usuario = sesion.get(Usuario, int(carga["sub"]))
-    if (fila is None or usuario is None or fila.revocada_en is not None
-            or fila.id_usuario != usuario.id_usuario or usuario.estado != "ACTIVO"):
+    # Sesión, usuario y rol en una sola consulta: esta verificación se hace en cada petición
+    # y cada ida y vuelta a la base de datos cuenta (defecto DEF-02 de la Práctica 9).
+    encontrado = sesion.execute(
+        select(SesionUsuario, Usuario, Rol)
+        .join(Usuario, Usuario.id_usuario == SesionUsuario.id_usuario)
+        .join(Rol, Rol.id_rol == Usuario.id_rol)
+        .where(SesionUsuario.id_sesion == int(carga["sid"]),
+               Usuario.id_usuario == int(carga["sub"]))
+    ).first()
+    if encontrado is None:
         raise _no_autenticado()
-    rol = sesion.get(Rol, usuario.id_rol)
-    if rol is None:
+    fila, usuario, rol = encontrado
+    if fila.revocada_en is not None or usuario.estado != "ACTIVO":
         raise _no_autenticado()
     return UsuarioActual(usuario.id_usuario, usuario.id_rol, rol.codigo, usuario.id_unidad,
                          fila.id_sesion, usuario.contrasena_temporal)

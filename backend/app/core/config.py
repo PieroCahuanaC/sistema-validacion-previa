@@ -8,7 +8,12 @@ import secrets
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
+
+PUERTO_POOLER_TRANSACCION = 6543
 
 
 class Configuracion(BaseSettings):
@@ -26,6 +31,29 @@ class Configuracion(BaseSettings):
     # Clave maestra para cifrar los datos personales de proveedores persona natural
     # (AES-256-GCM) y para el resumen HMAC del RUC: 64 caracteres hexadecimales.
     clave_cifrado: str = ""
+    # Conexiones a la base de datos por proceso (defecto DEF-01 de la Práctica 9). La suma
+    # de BD_POOL_TAMANO y BD_POOL_EXTRA es también el máximo de peticiones que la API atiende
+    # a la vez: así cada petición admitida siempre obtiene una conexión.
+    bd_pool_tamano: int = Field(default=5, ge=1, le=50)
+    bd_pool_extra: int = Field(default=5, ge=0, le=50)
+    # Segundos que una petición espera turno antes de recibir 503 «Servicio ocupado».
+    espera_turno_segundos: float = Field(default=10.0, gt=0, le=60)
+    # Pooler de Supabase en modo transacción (puerto 6543): no admite sentencias preparadas
+    # del lado del servidor (defecto DEF-03). Si no se define, se deduce del puerto.
+    bd_modo_transaccion: bool | None = None
+
+    @property
+    def max_peticiones_simultaneas(self) -> int:
+        return self.bd_pool_tamano + self.bd_pool_extra
+
+    @property
+    def pooler_en_modo_transaccion(self) -> bool:
+        if self.bd_modo_transaccion is not None:
+            return self.bd_modo_transaccion
+        try:
+            return make_url(self.url_sqlalchemy).port == PUERTO_POOLER_TRANSACCION
+        except (ArgumentError, ValueError, RuntimeError):
+            return False
 
     @property
     def documentacion_habilitada(self) -> bool:

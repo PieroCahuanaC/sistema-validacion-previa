@@ -42,6 +42,24 @@ MEF, ni durante una sesión con usuarios.
   lo despierta con `/api/v1/salud` antes de medir.
 - **La latencia de la base de datos incluye la red** entre el ejecutor de GitHub y Supabase.
 
+## Resultados y re-prueba
+
+Primera ejecución en calidad (18/11/2026, antes de las correcciones) y comparación con la copia
+local, antes y después de corregir los defectos DEF-01 a DEF-03 (`defectos.md`):
+
+| Ambiente | Flujo | Usuarios | p95 (s) | % errores | Resultado |
+|---|---|---|---|---|---|
+| Calidad, antes | Registro con semáforo | 8 | 3,592 | 0,00 % | No cumple el RNF-01 |
+| Calidad, antes | Apertura de la P03 | 25 a 200 | — | 96 a 99,8 % | La API deja de responder |
+| Calidad, antes | Consulta del saldo (pgbench) | 10 / 25 o más | 0,042 / — | 0 % / 100 % | El pooler en modo sesión admite 15 clientes |
+| Local, antes | Registro con semáforo | 8 / 25 / 50 | 0,196 / 0,677 / 39,0 | 0 / 2,2 / 90,5 % | Desde 50 la API se bloquea y no se recupera |
+| Local, después | Registro con semáforo | 8 / 25 / 50 / 100 / 150 / 200 | 0,190 / 0,445 / 0,911 / 1,937 / 3,004 / 4,350 | 0 % en todos | Umbral: 100 usuarios; la API sigue respondiendo |
+| Local, después | Apertura de la P03 | 25 / 50 / 100 / 150 / 200 | 0,180 / 0,248 / 1,681 / 2,994 / 4,564 | 0 % en todos | Umbral: 150 usuarios |
+
+Después de la corrección, la carga excesiva ya no produce errores ni bloqueos: aumenta el
+tiempo de respuesta (las peticiones esperan su turno) y, si la espera pasa de 10 s, la API
+responde 503 «Servicio ocupado». La re-prueba en calidad se registra en el informe.
+
 ## Comparación local
 
 La misma prueba se corre contra una copia local (API con un proceso de uvicorn y PostgreSQL en

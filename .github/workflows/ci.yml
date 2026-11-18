@@ -100,3 +100,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run build
+      # La CSP de vercel.json autoriza los scripts en línea por su resumen: si la compilación
+      # los cambia, el pipeline falla y muestra los resúmenes nuevos (DEF-04, Práctica 9).
+      - run: npm run verificar-csp

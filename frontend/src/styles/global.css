@@ -1,4 +1,10 @@
 @import "tailwindcss";
+/* Fuente servida desde el propio sitio (defecto DEF-04 de la Práctica 9): sin hojas de estilo
+   de terceros, la política de seguridad de contenidos puede limitarse a 'self'. */
+@import "@fontsource/public-sans/400.css";
+@import "@fontsource/public-sans/500.css";
+@import "@fontsource/public-sans/600.css";
+@import "@fontsource/public-sans/700.css";
 
 /* Tokens del sistema. El color solo se reserva para el semáforo, que es un dato del sistema
    (Práctica 7); el resto de la interfaz es sobria y legible. */
