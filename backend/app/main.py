@@ -16,12 +16,13 @@ from app.api.v1 import (
 )
 from app.core.config import obtener_configuracion
 from app.core.errores import TIPO_PROBLEMA, registrar_manejadores
+from app.core.middleware import CabecerasDeSeguridad, LimiteDeConcurrencia
 
 config = obtener_configuracion()
 
 app = FastAPI(
     title="Sistema presupuestal de validación previa",
-    version="0.4.0",
+    version="0.5.0",
     docs_url="/docs" if config.documentacion_habilitada else None,
     redoc_url=None,
     openapi_url="/openapi.json" if config.documentacion_habilitada else None,
@@ -52,6 +53,13 @@ async def verificar_origen(request: Request, call_next):
             "type": "about:blank", "title": "Acceso denegado", "status": 403,
             "detail": "Origen no permitido."})
     return await call_next(request)
+
+
+# Se agregan al final para que envuelvan a todo lo anterior (el último agregado es el más
+# externo): primero las cabeceras de seguridad y luego el turno de atención (DEF-01, DEF-05).
+app.add_middleware(LimiteDeConcurrencia, maximo=config.max_peticiones_simultaneas,
+                   espera_segundos=config.espera_turno_segundos)
+app.add_middleware(CabecerasDeSeguridad)
 
 
 @app.get("/api/v1/salud", tags=["sistema"])

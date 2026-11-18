@@ -26,6 +26,8 @@ LIMITE_BD_S = 2.0
 LIMITE_APP_S = 3.0
 LIMITE_ERRORES = 0.01
 USUARIOS_RNF01 = 8
+TIPOS_ERROR = {"resp_503_ocupado": "503 servicio ocupado", "resp_5xx_otros": "otros 5xx",
+               "resp_4xx": "4xx", "resp_sin_respuesta": "sin respuesta (tiempo agotado)"}
 FLUJOS = {"t_registro": "registro con semáforo", "t_formulario": "apertura del formulario P03"}
 
 
@@ -39,6 +41,7 @@ class Fila:
     errores: float
     muestras: int
     limite_s: float
+    tipos_error: dict[str, int] | None = None
 
     @property
     def cumple(self) -> bool:
@@ -92,10 +95,18 @@ def leer_app(etiqueta: str, archivo: Path) -> list[Fila]:
         valores = datos["values"]
         fallas = metricas.get(f"http_req_failed{{scenario:{flujo}_u{m.group(3)}}}", {})
         errores = fallas.get("values", {}).get("rate", 0.0)
-        nombre = FLUJOS[metrica]
-        filas.append(Fila(etiqueta, nombre, nivel, valores["avg"] / 1000,
-                          valores["p(95)"] / 1000, errores, int(valores.get("count", 0)),
-                          LIMITE_APP_S))
+        esc = f"{flujo}_u{m.group(3)}"
+        tipos = {nombre: int(metricas.get(f"{clave_k6}{{scenario:{esc}}}", {})
+                             .get("values", {}).get("count", 0))
+                 for clave_k6, nombre in TIPOS_ERROR.items()}
+        muestras = int(valores.get("count", 0))
+        if muestras == 0:  # ninguna respuesta medida: el nivel no cumple
+            filas.append(Fila(etiqueta, FLUJOS[metrica], nivel, None, None,
+                              max(errores, 1.0) if errores == 0 else errores, 0, LIMITE_APP_S,
+                              tipos))
+            continue
+        filas.append(Fila(etiqueta, FLUJOS[metrica], nivel, valores["avg"] / 1000,
+                          valores["p(95)"] / 1000, errores, muestras, LIMITE_APP_S, tipos))
     return sorted(filas, key=lambda f: (f.flujo != "registro con semáforo", f.nivel))
 
 
@@ -108,6 +119,8 @@ def pct(valor: float) -> str:
 
 
 def veredicto_app(f: Fila) -> str:
+    if f.muestras == 0:
+        return "Sin respuestas"
     if f.flujo == "registro con semáforo" and f.nivel == USUARIOS_RNF01:
         return "Sí (RNF-01)" if f.cumple else "No (RNF-01)"
     return "Dentro del umbral" if f.cumple else "Fuera del umbral"
@@ -209,6 +222,14 @@ def main() -> None:
             u = umbral([f for f in app if f.etiqueta == etiqueta and f.flujo == flujo],
                        "usuarios concurrentes")
             md.append(f"\nUmbral de la aplicación ({flujo}, {etiqueta}): {u}.")
+        con_tipos = [f for f in app if f.tipos_error and any(f.tipos_error.values())]
+        if con_tipos:
+            md += ["", "Respuestas fallidas por tipo:", "",
+                   "| Ambiente | Flujo | Usuarios | " + " | ".join(TIPOS_ERROR.values()) + " |",
+                   "|---|---|---|" + "---|" * len(TIPOS_ERROR)]
+            md += [f"| {f.etiqueta} | {f.flujo} | {f.nivel} | "
+                   + " | ".join(str(f.tipos_error[n]) for n in TIPOS_ERROR.values()) + " |"
+                   for f in con_tipos]
         escribir_csv(salida / "carga_app.csv", app, veredicto_app)
         if figura(salida / "figura_app.png", app, LIMITE_APP_S, "Usuarios concurrentes",
                   "Usuarios concurrentes vs tiempo de respuesta"):

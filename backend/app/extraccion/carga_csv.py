@@ -208,8 +208,9 @@ def _sincronizar_metas_activas(sesion: Session, anio_fiscal: int, ids_cargados: 
         meta.activa = meta.id_meta in ids_cargados
 
 
-def resolver_ruta_segura(ruta: str, carpeta_base: str) -> str:
-    """Canonaliza la ruta y exige que quede dentro de la carpeta base y sea un .csv.
+def resolver_ruta_segura(ruta: str, carpeta_base: str, extension: str = ".csv") -> str:
+    """Canonaliza la ruta y exige que quede dentro de la carpeta base y tenga la extensión
+    esperada (.csv para la carga manual, .zip para el archivo del MEF).
 
     Evita el recorrido de directorios (path traversal, CWE-22; regla pythonsecurity:S8707 de
     SonarQube): primero se resuelve la ruta canónica con realpath, que elimina los "../" y los
@@ -220,14 +221,12 @@ def resolver_ruta_segura(ruta: str, carpeta_base: str) -> str:
     base = os.path.realpath(carpeta_base)
     if not resuelta.startswith(base + os.sep):
         raise ValueError(f"El archivo {ruta!r} está fuera de la carpeta de trabajo.")
-    if not resuelta.lower().endswith(".csv"):
-        raise ValueError("El archivo debe tener extensión .csv.")
+    if not resuelta.lower().endswith(extension):
+        raise ValueError(f"El archivo debe tener extensión {extension}.")
     return resuelta
 
 
 def main(argv: list[str]) -> int:
-    from app.core.db import FabricaSesion
-
     if len(argv) != 4 or argv[0] not in COLUMNAS:
         print(__doc__)
         return 2
@@ -238,6 +237,9 @@ def main(argv: list[str]) -> int:
         print(error)
         return 2
     corte = datetime.fromisoformat(fecha).replace(tzinfo=ZoneInfo("America/Lima"))
+    # La base se abre solo después de validar los argumentos.
+    from app.core.db import FabricaSesion
+
     with open(ruta_segura, encoding="utf-8") as archivo, FabricaSesion() as sesion:
         carga = cargar_csv(sesion, fuente, int(anio), corte, archivo.read())
     print(f"Carga {carga.id_carga}: {carga.resultado}. {carga.detalle_error or ''}")

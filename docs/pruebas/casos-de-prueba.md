@@ -1,4 +1,4 @@
-# Casos de prueba — Incrementos 1 a 4B (validación presupuestal; seguridad y acceso; trámite completo; tablero y configuración; extracción automática)
+# Casos de prueba — Incrementos 1 a 4B y correcciones de la Práctica 9 (validación presupuestal; seguridad y acceso; trámite completo; tablero y configuración; extracción automática)
 
 Datos de prueba: mock (semillas). Meta 0012: PIM 180 000, certificación 152 000, compromiso anual
 148 500, saldo presupuestal disponible 31 500. Regla inicial: umbral 100 %, columna Compromiso,
@@ -176,3 +176,21 @@ requerimiento de S/ 3,500.00 resulta en rojo) y la 0033 no tiene saldo (ámbar S
 | CP-I66 | Extracción ante la caída o el cambio de la fuente | R01 | Descarga agotada; archivo con otras columnas | Carga FALLIDA con el motivo y bitácora ERROR; la carga vigente no cambia |
 | CP-I67 | Extracción con datos incoherentes; contingencia con ZIP local | RI-09, RF-14 | Certificación mayor que el PIM; ZIP local con corte posterior sin una meta; ZIP sin fecha de corte | RECHAZADA sin saldos; la carga local pasa a vigente y desactiva la meta ausente; sin corte, FALLIDA |
 
+
+## Correcciones de la Práctica 9 (defectos DEF-01 a DEF-06, ver `defectos.md`)
+
+| ID | Componente | RF / regla | Técnica | Entrada | Resultado esperado |
+|---|---|---|---|---|---|
+| CP-U52 | `LimiteDeConcurrencia` | DEF-01, RNF-01 | Caja negra | Dos turnos; cuatro peticiones lentas a la vez y una a `/salud`; luego dos más | Dos 200 y dos 503 «Servicio ocupado» con `Retry-After: 5`; `/salud` responde sin esperar; liberados los turnos, vuelve a atender |
+| CP-U53 | `argumentos_del_motor` | DEF-03 | Caja blanca (ramas) | Pooler en el puerto 6543 y 5432; puerto por defecto; modo forzado a sí y a no; sin cadena | Sentencias preparadas desactivadas solo en modo transacción; pool 4 + 6; turnos = conexiones |
+| CP-U54 | `CabecerasDeSeguridad` | DEF-05, OWASP A05 | Caja negra | Respuesta de la API con su propio `Cache-Control`; respuesta de `/docs` | `nosniff`, `DENY` y CSP `default-src 'none'` en la API sin reemplazar las del endpoint; `/docs` sin CSP |
+| CP-U55 | `validar_csv` | RF-14 | Caja blanca (ramas) | Fila del MEF sin código o sin nombre; fila del PAC sin referencia; valor estimado no numérico | Error con el motivo de cada rama |
+| CP-U56 | `resolver_ruta_segura` y línea de comandos de la carga CSV | DEF-06, CWE-22 | Caja blanca (ramas) | ZIP dentro de la carpeta con extensión `.zip` y `.csv`; argumentos incompletos; fuente desconocida; ruta `../` | ZIP aceptado como `.zip` y rechazado como `.csv`; código 2 sin abrir la base |
+| CP-U57 | `FuenteHttp.ultima_modificacion` | RF-14, R01 | Caja blanca (ramas) | Una falla de red y luego `Last-Modified` | Fecha leída al segundo intento; tiempo máximo (30, 60) s; agente de usuario propio |
+| CP-U58 | `FuenteHttp.descargar` | RF-14, R01 | Caja blanca (ramas) | Descarga en dos bloques; tres respuestas HTTP 503 | Archivo escrito por bloques de 1 MB; `ErrorExtraccion` tras tres intentos |
+
+| ID | Integración que verifica | RF / regla | Técnica | Entrada | Resultado esperado |
+|---|---|---|---|---|---|
+| CP-I68 | Aplicación completa → cabeceras | DEF-05, OWASP A05 | Caja negra | `/salud` y `/metas` sin sesión | Cabeceras de seguridad y `Cache-Control: no-store` también en el 401 |
+| CP-I69 | Aplicación completa → turnos → BD | DEF-01 | Caja negra | Límite registrado; 30 consultas de metas a la vez | Máximo de turnos = 10 conexiones; las 30 terminan con 200 |
+| CP-I70 | Línea de comandos → extracción y carga CSV → BD | DEF-06, RF-14 | Caja negra | `mef --anio 2024 --archivo 2024-Gasto-Diario.zip --corte 2024-12-31`; `carga_csv SEACE 2024 ... pac.csv` | Ambas terminan con código 0 y la carga queda EXITOSA |

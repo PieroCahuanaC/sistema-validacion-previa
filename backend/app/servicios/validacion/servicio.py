@@ -164,8 +164,7 @@ class ServicioValidacion:
     ) -> tuple[ResultadoSemaforo, SaldoMeta | None, CargaDatos | None]:
         """CU-01: calcula el semáforo con la última carga del MEF y la regla vigente (RI-17)."""
         monto = monto if monto is not None else requerimiento.monto_estimado
-        carga = self._presupuesto.ultima_carga_exitosa("MEF", meta.anio_fiscal)
-        saldo = self._presupuesto.saldo(meta.id_meta, carga.id_carga) if carga else None
+        carga, saldo = self._presupuesto.ultima_carga_con_saldo(meta.anio_fiscal, meta.id_meta)
         vigente = None
         if saldo is not None and carga is not None and carga.fecha_corte is not None:
             vigente = SaldoVigente(saldo.pim, saldo.certificacion, saldo.compromiso_anual,

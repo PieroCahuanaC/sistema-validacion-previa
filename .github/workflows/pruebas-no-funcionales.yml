@@ -124,7 +124,7 @@ jobs:
         run: |
           chmod a+w resultados/seguridad
           # -I: las advertencias no fallan la ejecución; los hallazgos se revisan en el reporte.
-          docker run --rm -v "$PWD/resultados/seguridad:/zap/wrk:rw" "$ZAP_IMAGEN" \
+          docker run --rm --network host -v "$PWD/resultados/seguridad:/zap/wrk:rw" "$ZAP_IMAGEN" \
             zap-baseline.py -t "$URL" -m 3 -I -r frontend.html -J frontend.json -w frontend.md \
             || [ $? -le 2 ]
       - name: Escaneo de la API (definición OpenAPI, modo seguro)
@@ -132,8 +132,10 @@ jobs:
           URL: ${{ inputs.url }}
         run: |
           # -S: modo seguro, sin ataques activos (no bloquea cuentas ni escribe datos).
-          docker run --rm -v "$PWD/resultados/seguridad:/zap/wrk:rw" "$ZAP_IMAGEN" \
-            zap-api-scan.py -t openapi.json -f openapi -O "$URL" -S -I \
+          # Red del host y puerto propio: en la primera ejecución, ZAP no pudo abrir su puerto
+          # interno en la red por defecto de Docker («Address already in use»).
+          docker run --rm --network host -v "$PWD/resultados/seguridad:/zap/wrk:rw" "$ZAP_IMAGEN" \
+            zap-api-scan.py -P 8091 -t openapi.json -f openapi -O "$URL" -S -I \
             -r api.html -J api.json -w api.md \
             || [ $? -le 2 ]
       - uses: actions/upload-artifact@v6
