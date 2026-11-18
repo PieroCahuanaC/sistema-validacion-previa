@@ -1,0 +1,176 @@
+# Pruebas no funcionales contra el ambiente de calidad (Práctica 9, sección 4).
+# Se lanza a mano desde Actions > Pruebas no funcionales > Run workflow. Cada prueba deja sus
+# reportes como artefacto descargable y el resumen queda en la página de la ejecución.
+#   bd          carga de la base de datos con pgbench (Tabla 10): solo lectura.
+#   app         carga del servidor de aplicación con k6 (Tabla 11, Figura 1; RNF-01).
+#   seguridad   escaneo pasivo de OWASP ZAP del frontend y de la API (Tabla 12).
+# Las pruebas corren una tras otra para que una no altere las mediciones de la otra.
+# Secretos: DATABASE_URL (bd), CARGA_USUARIO y CARGA_CLAVE (app). Nunca se imprimen.
+name: Pruebas no funcionales
+
+on:
+  workflow_dispatch:
+    inputs:
+      prueba:
+        description: Prueba a ejecutar
+        type: choice
+        options: [todas, bd, app, seguridad]
+        default: todas
+      url:
+        description: URL del sistema en calidad
+        default: https://sistema-validacion-previa.vercel.app
+      duracion:
+        description: Segundos por nivel de carga
+        default: "60"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pruebas-no-funcionales
+  cancel-in-progress: false
+
+env:
+  K6_IMAGEN: grafana/k6:1.8.3
+  PG_IMAGEN: postgres:17-alpine
+  ZAP_IMAGEN: zaproxy/zap-stable:2.17.0
+
+jobs:
+  carga-bd:
+    name: Carga de la base de datos (pgbench)
+    if: inputs.prueba == 'todas' || inputs.prueba == 'bd'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Ejecutar pgbench por niveles
+        env:
+          BD_URL: ${{ secrets.DATABASE_URL }}
+          DURACION: "30"
+        run: |
+          if [ -z "$BD_URL" ]; then echo "::error::Falta el secreto DATABASE_URL."; exit 1; fi
+          mkdir -p resultados/bd
+          docker run --rm --network host -e BD_URL -e DURACION -e SALIDA=/trabajo/resultados/bd \
+            -v "$PWD:/trabajo" "$PG_IMAGEN" sh /trabajo/pruebas/carga-bd/ejecutar.sh
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: carga-bd
+          path: resultados/bd
+
+  carga-app:
+    name: Carga del servidor de aplicación (k6)
+    needs: carga-bd
+    if: always() && (inputs.prueba == 'todas' || inputs.prueba == 'app')
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Ejecutar k6
+        env:
+          BASE_URL: ${{ inputs.url }}
+          USUARIO: ${{ secrets.CARGA_USUARIO }}
+          CLAVE: ${{ secrets.CARGA_CLAVE }}
+          DURACION: ${{ inputs.duracion }}
+          # En calidad solo el nivel del RNF-01 escribe (cada requerimiento se registra en rojo
+          # y se anula); la búsqueda del umbral usa el flujo de lectura.
+          NIVELES_ESCRITURA: "8"
+          NIVELES_LECTURA: "25,50,100,150,200"
+        run: |
+          if [ -z "$USUARIO" ] || [ -z "$CLAVE" ]; then
+            echo "::error::Faltan los secretos CARGA_USUARIO y CARGA_CLAVE."; exit 1
+          fi
+          mkdir -p resultados/app
+          # k6 termina con código 99 si algún nivel supera el umbral: es un resultado, no un fallo.
+          docker run --rm --network host -u "$(id -u):$(id -g)" \
+            -e BASE_URL -e USUARIO -e CLAVE -e DURACION \
+            -e NIVELES_ESCRITURA -e NIVELES_LECTURA -e SALIDA=/trabajo/resultados/app/k6.json \
+            -v "$PWD:/trabajo" -w /trabajo "$K6_IMAGEN" run --quiet pruebas/carga-app/flujo.js \
+            || [ $? -eq 99 ]
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: carga-app
+          path: resultados/app
+
+  seguridad:
+    name: Escaneo de seguridad (OWASP ZAP)
+    needs: [carga-bd, carga-app]
+    if: always() && (inputs.prueba == 'todas' || inputs.prueba == 'seguridad')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+      - name: Generar la definición OpenAPI de la API
+        # En calidad la documentación de la API está deshabilitada (CC-01); se genera del código.
+        working-directory: backend
+        env:
+          AMBIENTE: calidad
+          DATABASE_URL: postgresql+psycopg://sin:conexion@localhost/sin_base
+          CLAVE_JWT: solo-para-generar-la-definicion
+        run: |
+          pip install -r requirements.txt
+          mkdir -p ../resultados/seguridad
+          python -c "import json; from app.main import app; print(json.dumps(app.openapi()))" \
+            > ../resultados/seguridad/openapi.json
+      - name: Escaneo pasivo del frontend
+        env:
+          URL: ${{ inputs.url }}
+        run: |
+          chmod a+w resultados/seguridad
+          # -I: las advertencias no fallan la ejecución; los hallazgos se revisan en el reporte.
+          docker run --rm -v "$PWD/resultados/seguridad:/zap/wrk:rw" "$ZAP_IMAGEN" \
+            zap-baseline.py -t "$URL" -m 3 -I -r frontend.html -J frontend.json -w frontend.md \
+            || [ $? -le 2 ]
+      - name: Escaneo de la API (definición OpenAPI, modo seguro)
+        env:
+          URL: ${{ inputs.url }}
+        run: |
+          # -S: modo seguro, sin ataques activos (no bloquea cuentas ni escribe datos).
+          docker run --rm -v "$PWD/resultados/seguridad:/zap/wrk:rw" "$ZAP_IMAGEN" \
+            zap-api-scan.py -t openapi.json -f openapi -O "$URL" -S -I \
+            -r api.html -J api.json -w api.md \
+            || [ $? -le 2 ]
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: seguridad
+          path: resultados/seguridad
+
+  resumen:
+    name: Resumen de resultados
+    needs: [carga-bd, carga-app, seguridad]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+      - uses: actions/download-artifact@v7
+        with:
+          path: resultados
+      - name: Construir tablas y figuras
+        run: |
+          pip install matplotlib
+          ARGS=()
+          if [ -f resultados/carga-bd/contexto.txt ]; then
+            ARGS+=(--bd calidad=resultados/carga-bd)
+          fi
+          if [ -f resultados/carga-app/k6.json ]; then
+            ARGS+=(--app calidad=resultados/carga-app/k6.json)
+          fi
+          if [ "${#ARGS[@]}" -gt 0 ]; then
+            python pruebas/resumir.py "${ARGS[@]}" --salida resultados/resumen
+            cat resultados/resumen/resumen.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+          python pruebas/resumir_zap.py resultados/seguridad >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v6
+        with:
+          name: pruebas-no-funcionales
+          path: resultados
