@@ -24,3 +24,4 @@ o de configuración sin impacto directo).
 | OWASP ZAP (API) | En la red por defecto de Docker, ZAP no pudo abrir su puerto interno («Address already in use») y el escaneo de la API no se ejecutó. | Red del host y puerto propio (`-P 8091`). |
 | Resumen de resultados | Un nivel sin ninguna respuesta medida aparecía como «dentro del umbral». | Un nivel sin respuestas cuenta como «Sin respuestas» y no cumple. |
 | k6 | El resumen no distinguía los tipos de error. | Contadores por tipo: 503, otros 5xx, 4xx y sin respuesta. |
+| PyTest (CP-I66, CP-I67) | Fallaban al ejecutarse solos (`pytest -k cpi66`): dependían de la carga vigente que deja CP-I65. En la suite completa pasaban por el orden de ejecución. | Cada caso garantiza su propia carga vigente (`_con_carga_vigente`). Verificado ejecutando las 150 pruebas una por una. |

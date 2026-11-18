@@ -46,6 +46,17 @@ def _vigente(sesion):
     return RepositorioPresupuesto(sesion).ultima_carga_exitosa("MEF", ANIO)
 
 
+def _con_carga_vigente(sesion):
+    """Garantiza una carga buena vigente, para que el caso no dependa de que CP-I65 corra antes."""
+    vigente = _vigente(sesion)
+    if vigente is None:
+        r = ejecutar(sesion, ANIO, AHORA_FIJO,
+                     FuenteFalsa(datetime(2024, 12, 20, 13, 0, tzinfo=UTC), *FILAS))
+        assert r.resultado == "EXITOSA", r.mensaje
+        vigente = _vigente(sesion)
+    return vigente
+
+
 def test_cpi65_extraccion_exitosa_y_sin_cambios_al_repetir(sesion):
     fuente = FuenteFalsa(datetime(2024, 12, 20, 13, 0, tzinfo=UTC), *FILAS)
     r = ejecutar(sesion, ANIO, AHORA_FIJO, fuente)
@@ -67,7 +78,7 @@ def test_cpi65_extraccion_exitosa_y_sin_cambios_al_repetir(sesion):
 
 
 def test_cpi66_falla_de_la_fuente_conserva_la_ultima_carga_buena(sesion):
-    vigente = _vigente(sesion)
+    vigente = _con_carga_vigente(sesion)
     caida = FuenteFalsa(datetime(2024, 12, 21, 13, 0, tzinfo=UTC),
                         error="No se pudo descargar el archivo del MEF: tiempo agotado")
     r = ejecutar(sesion, ANIO, AHORA_FIJO, caida)
@@ -86,7 +97,7 @@ def test_cpi66_falla_de_la_fuente_conserva_la_ultima_carga_buena(sesion):
 
 
 def test_cpi67_datos_incoherentes_se_rechazan_y_carga_desde_archivo(sesion, tmp_path):
-    vigente = _vigente(sesion)
+    vigente = _con_carga_vigente(sesion)
     incoherente = FuenteFalsa(datetime(2024, 12, 22, 13, 0, tzinfo=UTC),
                               '"2024","0","300354","12","VIAS","0","1000","2000","100","0"')
     r = ejecutar(sesion, ANIO, AHORA_FIJO, incoherente)  # certificación mayor que el PIM
