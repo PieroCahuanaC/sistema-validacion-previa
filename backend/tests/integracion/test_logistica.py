@@ -1,6 +1,6 @@
 """Pruebas de integración de Logística y certificación (incremento 3, parte B).
 
-CP-I49 a CP-I57: validación documental (P09), cuadro comparativo con proveedores cifrados y
+CP-I49 a CP-I57 y CP-I71: validación documental (P09), cuadro comparativo con proveedores cifrados y
 revalidación con el precio de mercado (P10), certificación (P12) y orden (P13), hasta el
 cierre del trámite.
 """
@@ -252,3 +252,39 @@ def test_cpi57_ambar_con_precio_de_mercado_bloquea_la_certificacion(como, cuerpo
     assert _etapa(jp, rid, "ANULADO").status_code == 422  # el motivo es obligatorio
     assert _etapa(jp, rid, "ANULADO", "Sin disponibilidad presupuestal.").status_code == 200
     assert au.get(f"/api/v1/requerimientos/{rid}").json()["estado_actual"] == "Anulado"
+
+
+def test_cpi71_tiempo_hasta_la_certificacion_y_total_con_reloj(como, cuerpo_base):
+    """RF-07: el tiempo hasta la certificación y el tiempo total se miden desde el registro.
+
+    El reloj del servidor avanza entre las etapas (registro a las 0 h, aprobación a las 5 h,
+    documentación a las 15 h, cuadro a las 35 h, certificación a las 50 h y orden a las 80 h).
+    Cada rol inicia sesión al momento de actuar, porque el acceso vence a los 15 minutos.
+    """
+    from app.core.reloj import obtener_reloj
+    from app.main import app
+    from tests.integracion.conftest import RelojMovil
+
+    reloj = RelojMovil()
+    app.dependency_overrides[obtener_reloj] = lambda: reloj
+    au = como("AU")
+    rid = _registrar(au, cuerpo_base)
+    _enviar(au, rid)
+    reloj.adelantar(hours=5)
+    assert _etapa(como("GA"), rid, "APROBADO", "Procede.").status_code == 200
+    reloj.adelantar(hours=10)
+    _conforme(como("JL"), rid)
+    reloj.adelantar(hours=20)
+    cuadro = como("JL").put(f"/api/v1/requerimientos/{rid}/cuadro",
+                            json=_cuadro("12000.00", _cot("12000.00", ruc("2060012345"))))
+    assert cuadro.status_code == 200, cuadro.text
+    reloj.adelantar(hours=15)
+    assert _etapa(como("JP"), rid, "CERTIFICADO", "Certificación N.° 0124-2026").status_code \
+        == 200
+    reloj.adelantar(hours=30)
+    jl = como("JL")
+    assert _etapa(jl, rid, "ORDEN_EMITIDA", "Orden de compra N.° 046").status_code == 200
+    historial = jl.get(f"/api/v1/requerimientos/{rid}/historial").json()
+    assert historial["horas_hasta_certificacion"] == 50.0
+    assert historial["horas_totales"] == 80.0
+    assert [r["estado"] for r in historial["registros"]][-2:] == ["Certificado", "Orden emitida"]
